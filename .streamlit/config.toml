@@ -1,1 +1,4 @@
-maxUploadSize = 50
+[server]
+maxUploadSize = 50 # ou 500, ou 1000, etc. (sem aspas, é um número inteiro)
+enableCORS = false
+enableXsrfProtection = false
