@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extrator de Recomendações AECOM v17.0</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #222; }
+        header {
+            background: linear-gradient(135deg, #1a3a5c, #2d6a9f);
+            color: white; padding: 18px 32px;
+            display: flex; align-items: center; gap: 16px;
+        }
+        header h1 { font-size: 24px; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+        .section { background: white; border-radius: 8px; padding: 16px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .drop-zone {
+            border: 2px dashed #2d6a9f; border-radius: 8px; padding: 36px;
+            text-align: center; cursor: pointer; transition: background 0.2s; color: #555;
+            margin-bottom: 16px;
+        }
+        .drop-zone:hover, .drop-zone.dragover { background: #e8f0fe; }
+        .btn {
+            background: #2d6a9f; color: white; border: none; padding: 10px 24px;
+            border-radius: 6px; cursor: pointer; font-size: 16px; transition: background 0.2s;
+            display: block; margin: 16px auto;
+        }
+        .btn:hover { background: #1a3a5c; }
+        .btn:disabled { background: #aaa; cursor: not-allowed; }
+        .btn-export {
+            background: #2e7d32; margin-top: 24px;
+        }
+        .btn-export:hover { background: #1b5e20; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 16px 0; }
+        .box { background: #f5f7fa; border-radius: 8px; padding: 16px; text-align: center; }
+        .box p { font-size: 24px; font-weight: bold; color: #1a3a5c; margin-bottom: 8px; }
+        .box span { font-size: 14px; color: #666; }
+        table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+        th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+        th { background: #1a3a5c; color: white; }
+        tr:nth-child(even) { background: #f8f8f8; }
+        .tab-nav { display: flex; border-bottom: 1px solid #ddd; margin-bottom: 16px; }
+        .tab-btn {
+            padding: 10px 15px; cursor: pointer; border: none; background: none;
+            border-bottom: 2px solid transparent; transition: all 0.3s ease;
+            font-size: 16px; color: #555;
+        }
+        .tab-btn:hover { color: #1a3a5c; }
+        .tab-btn.active { border-bottom: 2px solid #2d6a9f; color: #1a3a5c; font-weight: bold; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.8); display: flex;
+            justify-content: center; align-items: center; z-index: 1000;
+            flex-direction: column;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #2d6a9f;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .loading-text { margin-top: 15px; font-size: 18px; color: #333; }
+        .empty { text-align: center; color: #888; font-style: italic; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Extrator de Recomendações AECOM</h1>
+    </header>
+
+    <div class="container">
+        <div class="section">
+            <h2>Upload de Arquivos PDF</h2>
+            <p>Esta ferramenta extrai recomendações de relatórios em PDF e gera um arquivo Excel.</p>
+            <div id="dropZone" class="drop-zone">
+                Arraste e solte seus arquivos PDF aqui, ou clique para selecionar.
+                <input type="file" id="fileInput" accept=".pdf" multiple hidden>
+            </div>
+            <div id="fileList" style="margin-top: 10px;"></div>
+            <button id="processBtn" class="btn" disabled>Processar PDFs e Gerar Excel</button>
+        </div>
+
+        <div class="section">
+            <h2>Resultados da Extração</h2>
+            <div class="grid">
+                <div class="box">
+                    <p id="totalHistorico">0</p>
+                    <span>Total de Recomendações</span>
+                </div>
+                <div class="box">
+                    <p id="novasRecomendacoes">0</p>
+                    <span>Novas Recomendações</span>
+                </div>
+                <div class="box">
+                    <p id="anexoIRecomendacoes">0</p>
+                    <span>Recomendações Anexo I</span>
+                </div>
+                <div class="box">
+                    <p id="corpoRecomendacoes">0</p>
+                    <span>Recomendações no Corpo</span>
+                </div>
+            </div>
+
+            <div class="tab-nav">
+                <button class="tab-btn active" data-tab="anexo">Anexo I</button>
+                <button class="tab-btn" data-tab="novas">Novas Recomendações</button>
+                <button class="tab-btn" data-tab="corpo">Corpo do Relatório</button>
+            </div>
+
+            <div id="tabAnexo" class="tab-content active">
+                <h3>Recomendações do Anexo I</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Origem</th>
+                            <th>Capítulo</th>
+                            <th>Item</th>
+                            <th>Assunto</th>
+                            <th>Descrição</th>
+                            <th>Classificação</th>
+                            <th>Tipo</th>
+                            <th>Prazo Atend. VALE</th>
+                            <th>Último Prazo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableAnexoBody">
+                        <tr><td colspan="10" class="empty">Nenhuma recomendação do Anexo I extraída ainda.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="tabNovas" class="tab-content">
+                <h3>Novas Recomendações</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Estrutura</th>
+                            <th>Descrição da Recomendação</th>
+                            <th>Classificação</th>
+                            <th>Tipo</th>
+                            <th>Prazo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableNovasBody">
+                        <tr><td colspan="6" class="empty">Nenhuma nova recomendação extraída ainda.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="tabCorpo" class="tab-content">
+                <h3>Recomendações no Corpo do Relatório</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Seção</th>
+                            <th>Descrição da Recomendação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableCorpoBody">
+                        <tr><td colspan="3" class="empty">Nenhuma recomendação do corpo do relatório extraída ainda.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <button id="btnExport" class="btn btn-export" disabled>Baixar Recomendações em Excel</button>
+        </div>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <div class="loading-text">Processando PDF...</div>
+    </div>
+
+    <script>
+        // Configuração do worker do pdf.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
+
+        let uploadedFiles = [];
+        let extractedData = {
+            anexo: [],
+            novas: [],
+            corpo: [],
+            sumario: {
+                total: 0,
+                aberto: 0,
+                concluido: 0,
+                cancelado: 0
+            },
+            sit_counts: {}
+        };
+
+        // --- Elementos DOM ---
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileListDiv = document.getElementById('fileList');
+        const processBtn = document.getElementById('processBtn');
+        const btnExport = document.getElementById('btnExport');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const loadingText = loadingOverlay.querySelector('.loading-text');
+
+        // --- Event Listeners para Upload ---
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+        function handleFiles(files) {
+            for (const file of files) {
+                if (file.type === 'application/pdf') {
+                    uploadedFiles.push(file);
+                }
+            }
+            updateFileList();
+        }
+
+        function updateFileList() {
+            fileListDiv.innerHTML = '';
+            if (uploadedFiles.length === 0) {
+                fileListDiv.innerHTML = '<p style="color: #888;">Nenhum arquivo PDF selecionado.</p>';
+                processBtn.disabled = true;
+                btnExport.disabled = true;
+                return;
+            }
+            const ul = document.createElement('ul');
+            uploadedFiles.forEach((file, index) => {
+                const li = document.createElement('li');
+                li.textContent = `${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+                const removeBtn = document.createElement('button');
+                removeBtn.textContent = 'x';
+                removeBtn.style.marginLeft = '10px';
+                removeBtn.style.cursor = 'pointer';
+                removeBtn.onclick = () => {
+                    uploadedFiles.splice(index, 1);
+                    updateFileList();
+                };
+                li.appendChild(removeBtn);
+                ul.appendChild(li);
+            });
+            fileListDiv.appendChild(ul);
+            processBtn.disabled = false;
+        }
+
+        // --- Funções de Extração ---
+
+        // Função auxiliar para normalizar texto (remover espaços extras, quebras de linha)
+        function normalizeText(text) {
+            return text.replace(/\s+/g, ' ').trim();
+        }
+
+        // Função para extrair texto e suas posições de uma página
+        async function getTextItems(page) {
+            const textContent = await page.getTextContent();
+            return textContent.items.map(item => {
+                const transform = pdfjsLib.Util.transform(page.getViewport().transform, item.transform);
+                const x = transform[4];
+                const y = transform[5];
+                const width = item.width * transform[0]; // Aproximação da largura
+                const height = item.height * transform[0]; // Aproximação da altura
+                return {
+                    str: item.str,
+                    x: x,
+                    y: y,
+                    width: width,
+                    height: height,
+                    fontName: item.fontName,
+                    dir: item.dir
+                };
+            });
+        }
+
+        // Função para extrair tabelas do Anexo I (baseado na imagem fornecida)
+        // Esta é uma lógica heurística e pode precisar de ajustes finos!
+        async function extractAnexoITables(page, pageNum) {
+            const textItems = await getTextItems(page);
+            const anexoIRows = [];
+
+            // Definir as posições X aproximadas das colunas do Anexo I
+            // Estes valores são baseados na análise visual do PDF de exemplo e podem variar!
+            const colX = {
+                'ID': 30, // Aproximado
+                'Origem': 60,
+                'Capítulo': 160,
+                'Item': 250,
+                'Assunto': 330,
+                'Descrição': 400,
+                'Classificação': 500,
+                'Tipo': 570,
+                'Prazo Atend. VALE': 600,
+                'Último Prazo': 650 // Aproximado
+            };
+
+            // Encontrar o cabeçalho da tabela para determinar a área de busca
+            let headerY = -1;
+            let headerFound = false;
+            for (const item of textItems) {
+                if (normalizeText(item.str).includes('ID') && normalizeText(item.str).includes('Origem') && normalizeText(item.str).includes('Capítulo')) {
+                    headerY = item.y;
+                    headerFound = true;
+                    break;
+                }
+            }
+
+            if (!headerFound) {
+                console.log(`Página ${pageNum}: Cabeçalho do Anexo I não encontrado.`);
+                return [];
+            }
+
+            // Agrupar itens de texto por linha (Y) abaixo do cabeçalho
+            const lines = {};
+            for (const item of textItems) {
+                if (item.y < headerY - 10 && item.y > 50) { // Filtrar texto abaixo do cabeçalho e acima do rodapé
+                    const y = Math.round(item.y); // Agrupar por Y arredondado
+                    if (!lines[y]) lines[y] = [];
+                    lines[y].push(item);
+                }
+            }
+
+            const sortedY = Object.keys(lines).map(Number).sort((a, b) => b - a); // Do topo para baixo
+
+            for (const y of sortedY) {
+                const lineItems = lines[y].sort((a, b) => a.x - b.x); // Ordenar por X
+                const rowData = {
+                    ID: '', Origem: '', Capítulo: '', Item: '', Assunto: '',
+                    Descrição: '', Classificação: '', Tipo: '',
+                    'Prazo Atend. VALE': '', 'Último Prazo': ''
+                };
+
+                // Tentar preencher as colunas com base nas posições X
+                let currentColumn = '';
+                for (const item of lineItems) {
+                    const text = normalizeText(item.str);
+
+                    // Lógica para determinar a qual coluna o texto pertence
+                    if (item.x >= colX['ID'] && item.x < colX['Origem']) {
+                        currentColumn = 'ID';
+                    } else if (item.x >= colX['Origem'] && item.x < colX['Capítulo']) {
+                        currentColumn = 'Origem';
+                    } else if (item.x >= colX['Capítulo'] && item.x < colX['Item']) {
+                        currentColumn = 'Capítulo';
+                    } else if (item.x >= colX['Item'] && item.x < colX['Assunto']) {
+                        currentColumn = 'Item';
+                    } else if (item.x >= colX['Assunto'] && item.x < colX['Descrição']) {
+                        currentColumn = 'Assunto';
+                    } else if (item.x >= colX['Descrição'] && item.x < colX['Classificação']) {
+                        currentColumn = 'Descrição';
+                    } else if (item.x >= colX['Classificação'] && item.x < colX['Tipo']) {
+                        currentColumn = 'Classificação';
+                    } else if (item.x >= colX['Tipo'] && item.x < colX['Prazo Atend. VALE']) {
+                        currentColumn = 'Tipo';
+                    } else if (item.x >= colX['Prazo Atend. VALE'] && item.x < colX['Último Prazo']) {
+                        currentColumn = 'Prazo Atend. VALE';
+                    } else if (item.x >= colX['Último Prazo']) {
+                        currentColumn = 'Último Prazo';
+                    } else {
+                        // Se não se encaixa em nenhuma coluna principal, tenta anexar à última
+                        // Isso ajuda com texto quebrado em várias partes
+                        if (currentColumn && rowData[currentColumn]) {
+                             rowData[currentColumn] += ' ' + text;
+                        }
+                        continue; // Pula para o próximo item se não for uma coluna conhecida
+                    }
+
+                    if (rowData[currentColumn]) {
+                        rowData[currentColumn] += ' ' + text;
+                    } else {
+                        rowData[currentColumn] = text;
+                    }
+                }
+
+                // Filtrar linhas que parecem ser dados válidos (ex: tem um ID numérico)
+                if (rowData.ID && !isNaN(parseInt(rowData.ID)) && rowData.Descrição) {
+                    anexoIRows.push(rowData);
+                }
+            }
+            console.log(`Página ${pageNum}: ${anexoIRows.length} linhas do Anexo I extraídas.`);
+            return anexoIRows;
+        }
+
+
+        // Função para encontrar recomendações no texto (Corpo do Relatório e Novas Recomendações)
+        function findRecommendationsInText(fullText, pageNum) {
+            const recommendations = [];
+
+            // Padrões para identificar o início de uma recomendação (adaptados do seu Python)
+            const patterns = [
+                /A auditoria recomenda[^.]*\./g,
+                /A AECOM recomenda[^.]*\./g,
+                /Recomenda-se que[^.]*\./g,
+                /É fundamental que[^.]*\./g,
+                /É essencial para[^.]*\./g,
+                /É importante que[^.]*\./g,
+                /Importante que sejam mantidos[^.]*\./g,
+                /Manter o monitoramento contínuo[^.]*\./g,
+                /Realizar o desassoreamento[^.]*\./g,
+                /Elaborar um Manual de Operação específico[^.]*\./g,
+                /Realizar manutenção preventiva da limpeza[^.]*\./g,
+                /Realizar análise técnica e intervenção corretiva[^.]*\./g,
+                /Implementar proteção adequada do material[^.]*\./g,
+                /Realizar o desassoreamento do reservatório[^.]*\./g,
+                /Realizar ensaios reológicos[^.]*\./g,
+                /Manter o monitoramento contínuo das condições[^.]*\./g,
+                /Adotar abordagem robusta e integrada[^.]*\./g,
+                /Incorporar ao planejamento uma margem de segurança temporal[^.]*\./g,
+                /Apresentar memoriais técnicos e estudos[^.]*\./g,
+                /Realizar análise geotécnica dos sumps[^.]*\./g,
+                /Implementar medidas de proteção nas margens dos canais provisórios[^.]*\./g,
+                /Manter o acompanhamento contínuo dos instrumentos[^.]*\./g,
+                /Realizar inspeção local sempre que houver movimentação anormal[^.]*\./g,
+                /Detalhar nos relatórios a localização dos eventos microssísmicos[^.]*\./g,
+                /Concluir as etapas de revisão de critérios e interpretação dos ensaios[^.]*\./g,
+                /Concluir os ensaios de laboratório e interpretar corretamente os resultados[^.]*\./g,
+                /Garantir a comunicação eficiente de alertas e a viabilidade prática do plano de evacuação[^.]*\./g,
+                /Esclarecer nos relatórios como os ensaios sem contrapressão contribuem[^.]*\./g,
+                /Apresentar no relatório final do estudo tensão-deformação as condições de moldagem[^.]*\./g,
+                /Remover os equipamentos remanescentes do sistema de bombeamento[^.]*\./g,
+                /Realizar acompanhamento detalhado dos instrumentos[^.]*\./g,
+                /Manter acompanhamento contínuo dos instrumentos[^.]*\./g,
+                /Avaliar a representatividade dos dados das investigações geotécnicas[^.]*\./g,
+                /Esclarecer os motivos do cancelamento das investigações[^.]*\./g,
+                /Avaliar a perda quantitativa e qualitativa decorrente do cancelamento[^.]*\./g,
+                /Apresentar os resultados do desassoreamento e levantamento batimétrico[^.]*\./g,
+                /Implementar medidas de mitigação provisórias para prevenir erosões[^.]*\./g,
+                /Concluir todas as etapas de recuperação da erosão[^.]*\./g,
+                /Realizar monitoramento contínuo dos canais provisórios[^.]*\./g,
+                /Adotar abordagem robusta e integrada para investigar fluxos[^.]*\./g,
+                /Realizar com brevidade a limpeza das canaletas de drenagem superficial[^.]*\./g,
+                /Implementar ações para controle da linha freática e prevenção de erosões[^.]*\./g,
+                /Garantir a rastreabilidade de alertas e assertividade das respostas operacionais[^.]*\./g,
+                /Manter medições contínuas e consolidar série histórica robusta[^.]*\./g,
+                /Realizar acompanhamento contínuo dos prismas de monitoramento[^.]*\./g,
+                /Manter controle contínuo das frentes de obra e articular as obras de contenção[^.]*\./g,
+                /Executar com brevidade as obras de drenagem superficial[^.]*\./g,
+                /Cumprir rigorosamente os prazos das investigações geofísicas e geotécnicas[^.]*\./g,
+                /Realizar acompanhamento contínuo e validação em campo dos instrumentos de monitoramento hidráulico[^.]*\./g,
+                /Executar com brevidade os reparos nas anomalias identificadas no canal de desvio[^.]*\./g,
+                /Retomar a apresentação da tabela de monitoramento geotécnico[^.]*\./g,
+                /Realizar o desassoreamento do reservatório da barragem Menezes I antes do início do período chuvoso[^.]*\./g,
+                /Remover o aterro de conquista do reservatório e garantir que o sistema extravasor esteja desobstruído[^.]*\./g,
+                /Definir novos níveis de controle para piezometria e indicadores de nível d’água[^.]*\./g,
+                /Realizar análise retroativa dos registros de monitoramento após implementação dos novos níveis de controle[^.]*\./g,
+                /Apresentar dados detalhados do resgate de fauna[^.]*\./g,
+                /Elaborar relatório final detalhado sobre os testes de desmonte com plasma[^.]*\./g,
+                /A AECOM solicita que a VALE esclareça quais são as medidas de mitigação[^.]*\./g,
+                /A auditoria ressalta que todas as etapas de recuperação devem ser concluídas previamente ao período chuvoso[^.]*\./g,
+                /A auditoria solicita esclarecimentos acerca das condições operacionais dos instrumentos[^.]*\./g,
+                /A auditoria enfatiza a necessidade de revisão, padronização e correção dessas informações[^.]*\./g,
+                /A auditoria ressalta, entretanto, a necessidade de manter acompanhamento reforçado e vigilância contínua[^.]*\./g,
+                /Essa repetição sugere a necessidade de acompanhamento mais detalhado e sistemático desses geofones[^.]*\./g,
+                /A auditoria destaca a necessidade de que a PdA conclua as etapas propostas incialmente dentro dos prazos previamente pactuados[^.]*\./g,
+                /Durante a Sessão Técnica foi solicitado à VALE que apresente o cronograma detalhado das atividades[^.]*\./g,
+                /A auditoria solicita a disponibilização do relatório de ensaios de laboratório Fase 1[^.]*\./g,
+                /A auditoria reitera a importância da conclusão do Projeto Detalhado de remoção integral de rejeitos[^.]*\./g,
+                /Conforme já recomendado pela auditoria, a remoção desses equipamentos deve ser realizada antes do início do período chuvoso[^.]*\./g,
+                /A auditoria ressalta que ambos os instrumentos se encontram instalados em regiões próximas[^.]*\./g,
+                /A auditoria ressalta que os instrumentos CFJB6PZ007, CFJB6PZ008, CFJB6PZ101, CFJB6PZ102 e CFJB6NA007 vêm apresentando valores próximos ao nível de atenção[^.]*\./g,
+                /A auditoria solicitou, no relatório 60612553ACM-DM-ZZ-RP-PM-0079-2[^.]*\./g,
+            ];
+
+            let recCount = 1;
+            for (const pattern of patterns) {
+                let match;
+                while ((match = pattern.exec(fullText)) !== null) {
+                    const recommendationText = normalizeText(match[0]);
+                    recommendations.push({
+                        '#': recCount++,
+                        'Seção': `Página ${pageNum}`, // Ou tentar inferir seção se houver títulos
+                        'Descrição da Recomendação': recommendationText
+                    });
+                }
+            }
+            console.log(`Página ${pageNum}: ${recommendations.length} recomendações de texto encontradas.`);
+            return recommendations;
+        }
+
+        // Função principal de processamento de PDF
+        async function processPdfFile(file) {
+            loadingText.textContent = `Processando ${file.name}...`;
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+            let currentAnexoIRows = [];
+            let currentCorpoRecommendations = [];
+
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                const fullText = textContent.items.map(item => item.str).join(' ');
+
+                // Tentar extrair tabelas do Anexo I
+                const anexoRows = await extractAnexoITables(page, i);
+                currentAnexoIRows = currentAnexoIRows.concat(anexoRows);
+
+                // Tentar extrair recomendações do corpo do texto
+                const corpoRecs = findRecommendationsInText(fullText, i);
+                currentCorpoRecommendations = currentCorpoRecommendations.concat(corpoRecs);
+            }
+
+            // Para simplificar, vamos considerar todas as recomendações de texto como "Novas Recomendações"
+            // e também como "Corpo do Relatório" por enquanto.
+            // A distinção entre "Novas" e "Corpo" no seu Excel original parece ser mais sobre a origem.
+            // Aqui, vamos usar a mesma lista para ambos, mas você pode refinar isso.
+            const novasRecs = currentCorpoRecommendations.map(rec => ({
+                '#': rec['#'],
+                'Estrutura': rec['Seção'], // Usando a seção como estrutura
+                'Descrição da Recomendação': rec['Descrição da Recomendação'],
+                'Classificação': '', // Não extraído automaticamente
+                'Tipo': '', // Não extraído automaticamente
+                'Prazo': '' // Não extraído automaticamente
+            }));
+
+            extractedData.anexo = extractedData.anexo.concat(currentAnexoIRows);
+            extractedData.novas = extractedData.novas.concat(novasRecs);
+            extractedData.corpo = extractedData.corpo.concat(currentCorpoRecommendations);
+
+            console.log(`Processamento de ${file.name} concluído.`);
+        }
+
+        // --- Botão Processar ---
+        processBtn.addEventListener('click', async () => {
+            extractedData = { anexo: [], novas: [], corpo: [], sumario: {}, sit_counts: {} }; // Resetar dados
+            loadingOverlay.style.display = 'flex';
+            processBtn.disabled = true;
+            btnExport.disabled = true;
+
+            try {
+                for (const file of uploadedFiles) {
+                    await processPdfFile(file);
+                }
+                updateResultsDisplay();
+                btnExport.disabled = false;
+            } catch (error) {
+                console.error("Erro durante o processamento:", error);
+                alert("Ocorreu um erro ao processar o PDF. Verifique o console do navegador para detalhes.");
+            } finally {
+                loadingOverlay.style.display = 'none';
+                processBtn.disabled = false;
+            }
+        });
+
+        // --- Atualizar Display de Resultados ---
+        function updateResultsDisplay() {
+            document.getElementById('totalHistorico').textContent = extractedData.anexo.length + extractedData.novas.length;
+            document.getElementById('novasRecomendacoes').textContent = extractedData.novas.length;
+            document.getElementById('anexoIRecomendacoes').textContent = extractedData.anexo.length;
+            document.getElementById('corpoRecomendacoes').textContent = extractedData.corpo.length;
+
+            const tableAnexoBody = document.getElementById('tableAnexoBody');
+            if (extractedData.anexo.length > 0) {
+                tableAnexoBody.innerHTML = extractedData.anexo.map(r => `
+                    <tr>
+                        <td>${r.ID || ''}</td>
+                        <td>${r.Origem || ''}</td>
+                        <td>${r.Capítulo || ''}</td>
+                        <td>${r.Item || ''}</td>
+                        <td>${r.Assunto || ''}</td>
+                        <td>${r.Descrição || ''}</td>
+                        <td>${r.Classificação || ''}</td>
+                        <td>${r.Tipo || ''}</td>
+                        <td>${r['Prazo Atend. VALE'] || ''}</td>
+                        <td>${r['Último Prazo'] || ''}</td>
+                    </tr>
+                `).join('');
+            } else {
+                tableAnexoBody.innerHTML = '<tr><td colspan="10" class="empty">Nenhuma recomendação do Anexo I encontrada.</td></tr>';
+            }
+
+            const tableNovasBody = document.getElementById('tableNovasBody');
+            if (extractedData.novas.length > 0) {
+                tableNovasBody.innerHTML = extractedData.novas.map(r => `
+                    <tr>
+                        <td>${r['#'] || ''}</td>
+                        <td>${r['Estrutura'] || ''}</td>
+                        <td>${r['Descrição da Recomendação'] || ''}</td>
+                        <td>${r['Classificação'] || ''}</td>
+                        <td>${r['Tipo'] || ''}</td>
+                        <td>${r['Prazo'] || ''}</td>
+                    </tr>
+                `).join('');
+            } else {
+                tableNovasBody.innerHTML = '<tr><td colspan="6" class="empty">Nenhuma nova recomendação extraída ainda.</td></tr>';
+            }
+
+            const tableCorpoBody = document.getElementById('tableCorpoBody');
+            if (extractedData.corpo.length > 0) {
+                tableCorpoBody.innerHTML = extractedData.corpo.map(r => `
+                    <tr>
+                        <td>${r['#'] || ''}</td>
+                        <td>${r['Seção'] || ''}</td>
+                        <td>${r['Descrição da Recomendação'] || ''}</td>
+                    </tr>
+                `).join('');
+            } else {
+                tableCorpoBody.innerHTML = '<tr><td colspan="3" class="empty">Nenhuma recomendação do corpo do relatório extraída ainda.</td></tr>';
+            }
+        }
+
+        // --- Exportar Excel ---
+        document.getElementById('btnExport').addEventListener('click', () => {
+            const wb = XLSX.utils.book_new();
+
+            // Aba Anexo I
+            const wsAnexoData = [['ID', 'Origem', 'Capítulo', 'Item', 'Assunto', 'Descrição', 'Classificação', 'Tipo', 'Prazo Atend. VALE', 'Último Prazo'],
+                                 ...extractedData.anexo.map(r => [r.ID, r.Origem, r.Capítulo, r.Item, r.Assunto, r.Descrição, r.Classificação, r.Tipo, r['Prazo Atend. VALE'], r['Último Prazo']])];
+            const wsAnexo = XLSX.utils.aoa_to_sheet(wsAnexoData);
+            wsAnexo['!cols'] = [10, 25, 20, 20, 20, 60, 15, 10, 15, 15].map(w => ({wch: w}));
+            XLSX.utils.book_append_sheet(wb, wsAnexo, 'Anexo I');
+
+            // Aba Novas Recomendações
+            const wsNovasData = [['#', 'Estrutura', 'Descrição da Recomendação', 'Classificação', 'Tipo', 'Prazo'],
+                                 ...extractedData.novas.map(r => [r['#'], r['Estrutura'], r['Descrição da Recomendação'], r['Classificação'], r['Tipo'], r['Prazo']])];
+            const wsNovas = XLSX.utils.aoa_to_sheet(wsNovasData);
+            wsNovas['!cols'] = [5, 25, 60, 15, 12, 12].map(w => ({wch: w}));
+            XLSX.utils.book_append_sheet(wb, wsNovas, 'Novas Recomendações');
+
+            // Aba Corpo do Relatório
+            const wsCorpoData = [['#', 'Seção', 'Descrição da Recomendação'],
+                                 ...extractedData.corpo.map(r => [r['#'], r['Seção'], r['Descrição da Recomendação']])];
+            const wsCorpo = XLSX.utils.aoa_to_sheet(wsCorpoData);
+            wsCorpo['!cols'] = [5, 30, 80].map(w => ({wch: w}));
+            XLSX.utils.book_append_sheet(wb, wsCorpo, 'Corpo do Relatório');
+
+            // Aba Sumário (simplificado, pois a lógica de contagem não foi totalmente adaptada)
+            const wsSumData = [
+                ['Métrica', 'Valor'],
+                ['Total Histórico', extractedData.anexo.length + extractedData.novas.length],
+                ['Em Aberto', '-'],
+                ['Concluídas', '-'],
+                ['Canceladas', '-'],
+                ['', ''],
+                ['Situação - Em Aberto', ''],
+                ['Atrasadas', '-'],
+                ['Vence este mês', '-'],
+                ['Em andamento', '-'],
+                ['Programadas', '-'],
+                ['Novas', extractedData.novas.length],
+                ['', ''],
+                ['Novas recomendações extraídas', extractedData.novas.length],
+                ['Recomendações no corpo', extractedData.corpo.length],
+                ['Recomendações Anexo I', extractedData.anexo.length],
+            ];
+            const wsSum = XLSX.utils.aoa_to_sheet(wsSumData);
+            wsSum['!cols'] = [30, 10].map(w => ({wch: w}));
+            XLSX.utils.book_append_sheet(wb, wsSum, 'Sumário');
+
+            const now = new Date();
+            const stamp = now.toISOString().slice(0, 10);
+            XLSX.writeFile(wb, `recomendacoes_aecom_${stamp}.xlsx`);
+        });
+
+        // --- Configurar abas ---
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById(`tab${btn.dataset.tab.charAt(0).toUpperCase() + btn.dataset.tab.slice(1)}`).classList.add('active');
+            });
+        });
+
+        // Inicialização
+        updateFileList();
+        updateResultsDisplay(); // Para garantir que os contadores iniciem em 0
+    </script>
+</body>
+</html>
