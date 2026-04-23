@@ -7,11 +7,9 @@
     <!-- Favicon simples para evitar erro 404 -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>">
 
-    <!-- CDNs para pdf.js e xlsx -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js"></script>
+    <!-- O worker.min.js será carregado via GlobalWorkerOptions.workerSrc -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #222; }
@@ -37,9 +35,11 @@
         .btn:hover { background: #1a3a5c; }
         .btn:disabled { background: #aaa; cursor: not-allowed; }
         .btn-export {
-            background: #2e7d32; margin-top: 24px;
+            background: #28a745; /* Verde */
         }
-        .btn-export:hover { background: #225c24; }
+        .btn-export:hover {
+            background: #218838;
+        }
         .file-list {
             list-style: none; padding: 0; margin-top: 16px;
             max-height: 200px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px;
@@ -47,7 +47,6 @@
         .file-list li {
             display: flex; justify-content: space-between; align-items: center;
             padding: 8px 12px; border-bottom: 1px solid #eee;
-            background: #fdfdfd;
         }
         .file-list li:last-child { border-bottom: none; }
         .file-list li button {
@@ -57,31 +56,30 @@
         .file-list li button:hover { background: #c82333; }
         .results-summary {
             display: flex; justify-content: space-around; flex-wrap: wrap; gap: 16px;
-            margin-top: 24px;
+            margin-bottom: 24px;
         }
-        .summary-item {
+        .summary-card {
             background: #e9ecef; padding: 12px 20px; border-radius: 6px;
             text-align: center; flex: 1; min-width: 150px;
         }
-        .summary-item h4 { font-size: 16px; color: #555; margin-bottom: 4px; }
-        .summary-item p { font-size: 24px; font-weight: bold; color: #2d6a9f; }
+        .summary-card h4 { font-size: 16px; color: #333; margin-bottom: 4px; }
+        .summary-card p { font-size: 24px; font-weight: bold; color: #2d6a9f; }
 
-        .tab-container { margin-top: 24px; }
-        .tab-buttons {
-            display: flex; border-bottom: 2px solid #ddd; margin-bottom: 16px;
+        .tabs {
+            display: flex; border-bottom: 1px solid #ddd; margin-bottom: 16px;
         }
         .tab-btn {
-            background: #f8f9fa; border: 1px solid #ddd; border-bottom: none;
-            padding: 10px 20px; cursor: pointer; border-top-left-radius: 6px;
-            border-top-right-radius: 6px; margin-right: 4px;
-            transition: background 0.2s, color 0.2s;
+            padding: 10px 15px; cursor: pointer; border: 1px solid transparent;
+            border-bottom: none; background: #f8f9fa; color: #555;
+            border-top-left-radius: 6px; border-top-right-radius: 6px;
+            margin-right: 2px; transition: all 0.2s;
         }
-        .tab-btn:hover:not(.active) { background: #e2e6ea; }
+        .tab-btn:hover { background: #e9ecef; }
         .tab-btn.active {
             background: white; border-color: #ddd; border-bottom-color: white;
             color: #2d6a9f; font-weight: bold;
         }
-        .tab-content { display: none; padding: 16px 0; }
+        .tab-content { display: none; padding-top: 10px; }
         .tab-content.active { display: block; }
 
         .results-table {
@@ -92,25 +90,25 @@
             vertical-align: top;
         }
         .results-table th {
-            background: #f0f0f0; font-weight: bold;
+            background: #f2f2f2; font-weight: bold; color: #333;
         }
         .status-message {
             padding: 10px; margin-top: 16px; border-radius: 4px;
             display: none; /* Escondido por padrão */
         }
-        .status-message.info { background-color: #e0f7fa; color: #00796b; border: 1px solid #00796b; }
-        .status-message.success { background-color: #e8f5e9; color: #2e7d32; border: 1px solid #2e7d32; }
-        .status-message.warning { background-color: #fff3e0; color: #ef6c00; border: 1px solid #ef6c00; }
-        .status-message.error { background-color: #ffebee; color: #d32f2f; border: 1px solid #d32f2f; }
+        .status-message.info { background-color: #e7f3fe; color: #0056b3; border: 1px solid #b8daff; }
+        .status-message.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .status-message.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .status-message.warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
 
         .progress-bar-container {
             width: 100%; background-color: #e0e0e0; border-radius: 5px;
             margin-top: 16px; overflow: hidden; display: none;
         }
         .progress-bar {
-            width: 0%; height: 20px; background-color: #4CAF50;
+            width: 0%; height: 20px; background-color: #2d6a9f;
             text-align: center; line-height: 20px; color: white;
-            transition: width 0.3s ease-in-out;
+            border-radius: 5px; transition: width 0.3s ease-in-out;
         }
     </style>
 </head>
@@ -118,111 +116,109 @@
     <header>
         <h1>Extrator de Recomendações AECOM</h1>
     </header>
-
     <div class="container">
         <div class="section">
-            <h2>1. Selecione os PDFs</h2>
+            <h2>1. Selecionar PDFs</h2>
             <div id="dropZone" class="drop-zone">
-                Arraste e solte seus arquivos PDF aqui, ou clique para selecionar.
+                <p>Arraste e solte arquivos PDF aqui, ou clique para selecionar.</p>
                 <input type="file" id="pdfInput" accept=".pdf" multiple hidden>
             </div>
             <ul id="fileList" class="file-list">
-                <!-- Lista de arquivos será populada aqui -->
+                <li>Nenhum PDF selecionado.</li>
             </ul>
             <button id="processPdfsBtn" class="btn" disabled>Processar PDFs</button>
-            <div id="statusMessage" class="status-message"></div>
             <div id="progressBarContainer" class="progress-bar-container">
                 <div id="progressBar" class="progress-bar">0%</div>
             </div>
+            <div id="statusMessage" class="status-message"></div>
         </div>
 
         <div class="section">
             <h2>2. Resultados da Extração</h2>
             <div class="results-summary">
-                <div class="summary-item">
-                    <h4>Anexo I</h4>
+                <div class="summary-card">
+                    <h4>Total Anexo I</h4>
                     <p id="totalAnexoI">0</p>
                 </div>
-                <div class="summary-item">
-                    <h4>Corpo do Relatório</h4>
+                <div class="summary-card">
+                    <h4>Total Corpo do Relatório</h4>
                     <p id="totalCorpo">0</p>
                 </div>
-                <div class="summary-item">
-                    <h4>Novas Recomendações</h4>
+                <div class="summary-card">
+                    <h4>Total Novas Recomendações</h4>
                     <p id="totalNovas">0</p>
                 </div>
-                <div class="summary-item">
+                <div class="summary-card">
                     <h4>Total Geral</h4>
                     <p id="totalGeral">0</p>
                 </div>
             </div>
+
             <button id="exportExcelBtn" class="btn btn-export" disabled>Exportar para Excel</button>
 
-            <div class="tab-container">
-                <div class="tab-buttons">
-                    <button class="tab-btn active" data-tab="anexo">Anexo I</button>
-                    <button class="tab-btn" data-tab="corpo">Corpo do Relatório</button>
-                    <button class="tab-btn" data-tab="novas">Novas Recomendações</button>
-                </div>
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="anexoI">Anexo I</button>
+                <button class="tab-btn" data-tab="corpo">Corpo do Relatório</button>
+                <button class="tab-btn" data-tab="novas">Novas Recomendações</button>
+            </div>
 
-                <div id="tabAnexo" class="tab-content active">
-                    <h3>Recomendações do Anexo I</h3>
-                    <table class="results-table">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Origem</th>
-                                <th>Capítulo</th>
-                                <th>Item</th>
-                                <th>Assunto</th>
-                                <th>Descrição</th>
-                                <th>Classificação</th>
-                                <th>Tipo</th>
-                                <th>Prazo de Atendimento VALE</th>
-                                <th>Último Prazo</th>
-                            </tr>
-                        </thead>
-                        <tbody id="anexoITableBody">
-                            <!-- Dados serão inseridos aqui -->
-                        </tbody>
-                    </table>
-                </div>
+            <div id="tabAnexoI" class="tab-content active">
+                <h3>Recomendações do Anexo I</h3>
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Origem</th>
+                            <th>Capítulo</th>
+                            <th>Item</th>
+                            <th>Assunto</th>
+                            <th>Descrição</th>
+                            <th>Classificação</th>
+                            <th>Tipo</th>
+                            <th>Prazo de Atendimento VALE</th>
+                            <th>Último Prazo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="anexoITableBody">
+                        <!-- Dados serão inseridos aqui -->
+                    </tbody>
+                </table>
+            </div>
 
-                <div id="tabCorpo" class="tab-content">
-                    <h3>Recomendações do Corpo do Relatório</h3>
-                    <table class="results-table">
-                        <thead>
-                            <tr>
-                                <th>Local (página/seção)</th>
-                                <th>Texto original (trecho)</th>
-                                <th>Texto da recomendação (normalizada)</th>
-                                <th>ÁREA RESPONSAVEL</th>
-                                <th>COMENTÁRIO/ENCAMINHAMENTO</th>
-                            </tr>
-                        </thead>
-                        <tbody id="corpoRelatorioTableBody">
-                            <!-- Dados serão inseridos aqui -->
-                        </tbody>
-                    </table>
-                </div>
+            <div id="tabCorpo" class="tab-content">
+                <h3>Recomendações do Corpo do Relatório</h3>
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th>Local (página/seção)</th>
+                            <th>Texto original (trecho)</th>
+                            <th>Texto da recomendação (normalizada)</th>
+                            <th>ÁREA RESPONSAVEL</th>
+                            <th>COMENTÁRIO/ENCAMINHAMENTO</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoRelatorioTableBody">
+                        <!-- Dados serão inseridos aqui -->
+                    </tbody>
+                </table>
+            </div>
 
-                <div id="tabNovas" class="tab-content">
-                    <h3>Novas Recomendações</h3>
-                    <table class="results-table">
-                        <thead>
-                            <tr>
-                                <th>Local (página/seção)</th>
-                                <th>Texto original (trecho)</th>
-                                <th>Texto da recomendação (normalizada)</th>
-                                <th>ÁREA RESPONSAVEL</th>
-                                <th>COMENTÁRIO/ENCAMINHAMENTO</th>
-                            </tr>
-                        </thead>
-                        <tbody id="novasRecomendacoesTableBody">
-                            <!-- Dados serão inseridos aqui -->
-                        </tbody>
-                    </table>
-                </div>
+            <div id="tabNovas" class="tab-content">
+                <h3>Novas Recomendações</h3>
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th>Local (página/seção)</th>
+                            <th>Texto original (trecho)</th>
+                            <th>Texto da recomendação (normalizada)</th>
+                            <th>ÁREA RESPONSAVEL</th>
+                            <th>COMENTÁRIO/ENCAMINHAMENTO</th>
+                        </tr>
+                    </thead>
+                    <tbody id="novasRecomendacoesTableBody">
+                        <!-- Dados serão inseridos aqui -->
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -589,7 +585,7 @@
                         for (let i = 1; i <= pdfDoc.numPages; i++) {
                             const page = await pdfDoc.getPage(i);
                             const pageTextContent = await page.getTextContent();
-                            const pageText = pageTextContent.items.map(item => item.str).join(' ');
+                            const pageText = pageTextContent.items.map(item => item.str).join('\n'); // Usar \n para preservar quebras de linha
 
                             // Extração de tabelas
                             const anexoITableData = await extractAnexoITables(page, i);
@@ -602,7 +598,6 @@
                             // Regex mais genérica para capturar frases que pareçam recomendações
                             // Procura por frases que começam com "A AECOM recomenda", "A auditoria recomenda", "Recomenda-se", etc.
                             // e tenta capturar até o final da linha ou antes de outra recomendação/cabeçalho
-                            // Regex corrigida para evitar o erro de sintaxe
                             const novasRecomendacoesRegex = /(?:A AECOM recomenda|A auditoria recomenda|Recomenda-se|Recomendação):\s*([^.\n]+(?:[.][^.\n]+)*?)(?=\n(?:A AECOM recomenda|A auditoria recomenda|Recomenda-se|Recomendação|RELATORIO|\d+\.\d+\.\d+|
 $
 ))/gi;
