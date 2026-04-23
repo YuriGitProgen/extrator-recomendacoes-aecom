@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Extrator de Recomendações AECOM v17.0</title>
+    <title>Extrator de Recomendações AECOM v18.0</title>
+    <!-- Favicon para evitar erro 404 no console -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -166,12 +168,15 @@
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>Seção</th>
-                            <th>Descrição da Recomendação</th>
+                            <th>Local (página/seção)</th>
+                            <th>Texto original (trecho)</th>
+                            <th>Texto da recomendação (normalizada)</th>
+                            <th>ÁREA RESPONSAVEL</th>
+                            <th>COMENTÁRIO/ENCAMINHAMENTO</th>
                         </tr>
                     </thead>
                     <tbody id="tableCorpoBody">
-                        <tr><td colspan="3" class="empty">Nenhuma recomendação do corpo do relatório extraída ainda.</td></tr>
+                        <tr><td colspan="6" class="empty">Nenhuma recomendação do corpo do relatório extraída ainda.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -292,32 +297,24 @@
             });
         }
 
-        // Função para extrair tabelas do Anexo I (baseado na imagem fornecida)
-        // Esta é uma lógica heurística e pode precisar de ajustes finos!
-        async function extractAnexoITables(page, pageNum) {
+        /**
+         * Função genérica para extrair tabelas de um PDF.
+         * @param {Object} page - Objeto da página do PDF.
+         * @param {number} pageNum - Número da página.
+         * @param {string[]} headers - Array de strings com os nomes dos cabeçalhos esperados.
+         * @param {Object} colXPositions - Objeto com as posições X aproximadas de cada coluna.
+         * @param {string} headerSearchString - String para identificar a linha do cabeçalho da tabela.
+         * @param {string} tableName - Nome da tabela para logs.
+         * @returns {Array<Object>} Array de objetos, onde cada objeto é uma linha da tabela.
+         */
+        async function extractTable(page, pageNum, headers, colXPositions, headerSearchString, tableName) {
             const textItems = await getTextItems(page);
-            const anexoIRows = [];
+            const tableRows = [];
 
-            // Definir as posições X aproximadas das colunas do Anexo I
-            // Estes valores são baseados na análise visual do PDF de exemplo e podem variar!
-            const colX = {
-                'ID': 30, // Aproximado
-                'Origem': 60,
-                'Capítulo': 160,
-                'Item': 250,
-                'Assunto': 330,
-                'Descrição': 400,
-                'Classificação': 500,
-                'Tipo': 570,
-                'Prazo Atend. VALE': 600,
-                'Último Prazo': 650 // Aproximado
-            };
-
-            // Encontrar o cabeçalho da tabela para determinar a área de busca
             let headerY = -1;
             let headerFound = false;
             for (const item of textItems) {
-                if (normalizeText(item.str).includes('ID') && normalizeText(item.str).includes('Origem') && normalizeText(item.str).includes('Capítulo')) {
+                if (normalizeText(item.str).includes(headerSearchString)) {
                     headerY = item.y;
                     headerFound = true;
                     break;
@@ -325,14 +322,16 @@
             }
 
             if (!headerFound) {
-                console.log(`Página ${pageNum}: Cabeçalho do Anexo I não encontrado.`);
+                console.log(`Página ${pageNum}: Cabeçalho da tabela "${tableName}" não encontrado.`);
                 return [];
             }
 
             // Agrupar itens de texto por linha (Y) abaixo do cabeçalho
             const lines = {};
+            // Ajuste o limite inferior (50) e superior (headerY - 10) conforme necessário
+            // para evitar rodapés/cabeçalhos e garantir que pegue apenas o corpo da tabela.
             for (const item of textItems) {
-                if (item.y < headerY - 10 && item.y > 50) { // Filtrar texto abaixo do cabeçalho e acima do rodapé
+                if (item.y < headerY - 10 && item.y > 50) {
                     const y = Math.round(item.y); // Agrupar por Y arredondado
                     if (!lines[y]) lines[y] = [];
                     lines[y].push(item);
@@ -343,158 +342,92 @@
 
             for (const y of sortedY) {
                 const lineItems = lines[y].sort((a, b) => a.x - b.x); // Ordenar por X
-                const rowData = {
-                    ID: '', Origem: '', Capítulo: '', Item: '', Assunto: '',
-                    Descrição: '', Classificação: '', Tipo: '',
-                    'Prazo Atend. VALE': '', 'Último Prazo': ''
-                };
+                const rowData = {};
+                headers.forEach(h => rowData[h] = '');
 
-                // Tentar preencher as colunas com base nas posições X
                 let currentColumn = '';
                 for (const item of lineItems) {
                     const text = normalizeText(item.str);
 
-                    // Lógica para determinar a qual coluna o texto pertence
-                    if (item.x >= colX['ID'] && item.x < colX['Origem']) {
-                        currentColumn = 'ID';
-                    } else if (item.x >= colX['Origem'] && item.x < colX['Capítulo']) {
-                        currentColumn = 'Origem';
-                    } else if (item.x >= colX['Capítulo'] && item.x < colX['Item']) {
-                        currentColumn = 'Capítulo';
-                    } else if (item.x >= colX['Item'] && item.x < colX['Assunto']) {
-                        currentColumn = 'Item';
-                    } else if (item.x >= colX['Assunto'] && item.x < colX['Descrição']) {
-                        currentColumn = 'Assunto';
-                    } else if (item.x >= colX['Descrição'] && item.x < colX['Classificação']) {
-                        currentColumn = 'Descrição';
-                    } else if (item.x >= colX['Classificação'] && item.x < colX['Tipo']) {
-                        currentColumn = 'Classificação';
-                    } else if (item.x >= colX['Tipo'] && item.x < colX['Prazo Atend. VALE']) {
-                        currentColumn = 'Tipo';
-                    } else if (item.x >= colX['Prazo Atend. VALE'] && item.x < colX['Último Prazo']) {
-                        currentColumn = 'Prazo Atend. VALE';
-                    } else if (item.x >= colX['Último Prazo']) {
-                        currentColumn = 'Último Prazo';
-                    } else {
-                        // Se não se encaixa em nenhuma coluna principal, tenta anexar à última
-                        // Isso ajuda com texto quebrado em várias partes
-                        if (currentColumn && rowData[currentColumn]) {
-                             rowData[currentColumn] += ' ' + text;
+                    // Encontrar a coluna mais próxima para o item de texto
+                    let closestCol = '';
+                    let minDistance = Infinity;
+                    for (const header of headers) {
+                        const colX = colXPositions[header];
+                        if (colX !== undefined) {
+                            const distance = Math.abs(item.x - colX);
+                            if (distance < minDistance) {
+                                minDistance = distance;
+                                closestCol = header;
+                            }
                         }
-                        continue; // Pula para o próximo item se não for uma coluna conhecida
                     }
 
-                    if (rowData[currentColumn]) {
+                    if (closestCol) {
+                        if (rowData[closestCol]) {
+                            rowData[closestCol] += ' ' + text;
+                        } else {
+                            rowData[closestCol] = text;
+                        }
+                        currentColumn = closestCol; // Manter a coluna atual para texto quebrado
+                    } else if (currentColumn && rowData[currentColumn]) {
+                        // Se não encontrou uma coluna clara, tenta anexar à última coluna conhecida
                         rowData[currentColumn] += ' ' + text;
-                    } else {
-                        rowData[currentColumn] = text;
                     }
                 }
 
-                // Filtrar linhas que parecem ser dados válidos (ex: tem um ID numérico)
-                if (rowData.ID && !isNaN(parseInt(rowData.ID)) && rowData.Descrição) {
-                    anexoIRows.push(rowData);
+                // Filtrar linhas que parecem ser dados válidos (ex: primeira coluna não vazia)
+                // Adapte esta condição de filtro conforme a tabela.
+                if (headers.length > 0 && rowData[headers[0]] && rowData[headers[0]].length > 0) {
+                    tableRows.push(rowData);
                 }
             }
-            console.log(`Página ${pageNum}: ${anexoIRows.length} linhas do Anexo I extraídas.`);
-            return anexoIRows;
+            console.log(`Página ${pageNum}: ${tableRows.length} linhas da tabela "${tableName}" extraídas.`);
+            return tableRows;
         }
 
 
-        // Função para encontrar recomendações no texto (Corpo do Relatório e Novas Recomendações)
-        function findRecommendationsInText(fullText, pageNum) {
-            const recommendations = [];
+        // --- Definições de Tabelas Específicas ---
 
-            // Padrões para identificar o início de uma recomendação (adaptados do seu Python)
-            const patterns = [
-                /A auditoria recomenda[^.]*\./g,
-                /A AECOM recomenda[^.]*\./g,
-                /Recomenda-se que[^.]*\./g,
-                /É fundamental que[^.]*\./g,
-                /É essencial para[^.]*\./g,
-                /É importante que[^.]*\./g,
-                /Importante que sejam mantidos[^.]*\./g,
-                /Manter o monitoramento contínuo[^.]*\./g,
-                /Realizar o desassoreamento[^.]*\./g,
-                /Elaborar um Manual de Operação específico[^.]*\./g,
-                /Realizar manutenção preventiva da limpeza[^.]*\./g,
-                /Realizar análise técnica e intervenção corretiva[^.]*\./g,
-                /Implementar proteção adequada do material[^.]*\./g,
-                /Realizar o desassoreamento do reservatório[^.]*\./g,
-                /Realizar ensaios reológicos[^.]*\./g,
-                /Manter o monitoramento contínuo das condições[^.]*\./g,
-                /Adotar abordagem robusta e integrada[^.]*\./g,
-                /Incorporar ao planejamento uma margem de segurança temporal[^.]*\./g,
-                /Apresentar memoriais técnicos e estudos[^.]*\./g,
-                /Realizar análise geotécnica dos sumps[^.]*\./g,
-                /Implementar medidas de proteção nas margens dos canais provisórios[^.]*\./g,
-                /Manter o acompanhamento contínuo dos instrumentos[^.]*\./g,
-                /Realizar inspeção local sempre que houver movimentação anormal[^.]*\./g,
-                /Detalhar nos relatórios a localização dos eventos microssísmicos[^.]*\./g,
-                /Concluir as etapas de revisão de critérios e interpretação dos ensaios[^.]*\./g,
-                /Concluir os ensaios de laboratório e interpretar corretamente os resultados[^.]*\./g,
-                /Garantir a comunicação eficiente de alertas e a viabilidade prática do plano de evacuação[^.]*\./g,
-                /Esclarecer nos relatórios como os ensaios sem contrapressão contribuem[^.]*\./g,
-                /Apresentar no relatório final do estudo tensão-deformação as condições de moldagem[^.]*\./g,
-                /Remover os equipamentos remanescentes do sistema de bombeamento[^.]*\./g,
-                /Realizar acompanhamento detalhado dos instrumentos[^.]*\./g,
-                /Manter acompanhamento contínuo dos instrumentos[^.]*\./g,
-                /Avaliar a representatividade dos dados das investigações geotécnicas[^.]*\./g,
-                /Esclarecer os motivos do cancelamento das investigações[^.]*\./g,
-                /Avaliar a perda quantitativa e qualitativa decorrente do cancelamento[^.]*\./g,
-                /Apresentar os resultados do desassoreamento e levantamento batimétrico[^.]*\./g,
-                /Implementar medidas de mitigação provisórias para prevenir erosões[^.]*\./g,
-                /Concluir todas as etapas de recuperação da erosão[^.]*\./g,
-                /Realizar monitoramento contínuo dos canais provisórios[^.]*\./g,
-                /Adotar abordagem robusta e integrada para investigar fluxos[^.]*\./g,
-                /Realizar com brevidade a limpeza das canaletas de drenagem superficial[^.]*\./g,
-                /Implementar ações para controle da linha freática e prevenção de erosões[^.]*\./g,
-                /Garantir a rastreabilidade de alertas e assertividade das respostas operacionais[^.]*\./g,
-                /Manter medições contínuas e consolidar série histórica robusta[^.]*\./g,
-                /Realizar acompanhamento contínuo dos prismas de monitoramento[^.]*\./g,
-                /Manter controle contínuo das frentes de obra e articular as obras de contenção[^.]*\./g,
-                /Executar com brevidade as obras de drenagem superficial[^.]*\./g,
-                /Cumprir rigorosamente os prazos das investigações geofísicas e geotécnicas[^.]*\./g,
-                /Realizar acompanhamento contínuo e validação em campo dos instrumentos de monitoramento hidráulico[^.]*\./g,
-                /Executar com brevidade os reparos nas anomalias identificadas no canal de desvio[^.]*\./g,
-                /Retomar a apresentação da tabela de monitoramento geotécnico[^.]*\./g,
-                /Realizar o desassoreamento do reservatório da barragem Menezes I antes do início do período chuvoso[^.]*\./g,
-                /Remover o aterro de conquista do reservatório e garantir que o sistema extravasor esteja desobstruído[^.]*\./g,
-                /Definir novos níveis de controle para piezometria e indicadores de nível d’água[^.]*\./g,
-                /Realizar análise retroativa dos registros de monitoramento após implementação dos novos níveis de controle[^.]*\./g,
-                /Apresentar dados detalhados do resgate de fauna[^.]*\./g,
-                /Elaborar relatório final detalhado sobre os testes de desmonte com plasma[^.]*\./g,
-                /A AECOM solicita que a VALE esclareça quais são as medidas de mitigação[^.]*\./g,
-                /A auditoria ressalta que todas as etapas de recuperação devem ser concluídas previamente ao período chuvoso[^.]*\./g,
-                /A auditoria solicita esclarecimentos acerca das condições operacionais dos instrumentos[^.]*\./g,
-                /A auditoria enfatiza a necessidade de revisão, padronização e correção dessas informações[^.]*\./g,
-                /A auditoria ressalta, entretanto, a necessidade de manter acompanhamento reforçado e vigilância contínua[^.]*\./g,
-                /Essa repetição sugere a necessidade de acompanhamento mais detalhado e sistemático desses geofones[^.]*\./g,
-                /A auditoria destaca a necessidade de que a PdA conclua as etapas propostas incialmente dentro dos prazos previamente pactuados[^.]*\./g,
-                /Durante a Sessão Técnica foi solicitado à VALE que apresente o cronograma detalhado das atividades[^.]*\./g,
-                /A auditoria solicita a disponibilização do relatório de ensaios de laboratório Fase 1[^.]*\./g,
-                /A auditoria reitera a importância da conclusão do Projeto Detalhado de remoção integral de rejeitos[^.]*\./g,
-                /Conforme já recomendado pela auditoria, a remoção desses equipamentos deve ser realizada antes do início do período chuvoso[^.]*\./g,
-                /A auditoria ressalta que ambos os instrumentos se encontram instalados em regiões próximas[^.]*\./g,
-                /A auditoria ressalta que os instrumentos CFJB6PZ007, CFJB6PZ008, CFJB6PZ101, CFJB6PZ102 e CFJB6NA007 vêm apresentando valores próximos ao nível de atenção[^.]*\./g,
-                /A auditoria solicitou, no relatório 60612553ACM-DM-ZZ-RP-PM-0079-2[^.]*\./g,
-            ];
+        // Anexo I
+        const anexoIHeaders = ['ID', 'Origem', 'Capítulo', 'Item', 'Assunto', 'Descrição', 'Classificação', 'Tipo', 'Prazo Atend. VALE', 'Último Prazo'];
+        const anexoIColX = {
+            'ID': 30, // Aproximado
+            'Origem': 60,
+            'Capítulo': 160,
+            'Item': 250,
+            'Assunto': 330,
+            'Descrição': 400,
+            'Classificação': 500,
+            'Tipo': 570,
+            'Prazo Atend. VALE': 600,
+            'Último Prazo': 650 // Aproximado
+        };
+        const anexoIHeaderSearch = 'ID Origem Capítulo Item Assunto Descrição Classificação Tipo Prazo Atend. VALE Último Prazo'; // String que aparece no cabeçalho
 
-            let recCount = 1;
-            for (const pattern of patterns) {
-                let match;
-                while ((match = pattern.exec(fullText)) !== null) {
-                    const recommendationText = normalizeText(match[0]);
-                    recommendations.push({
-                        '#': recCount++,
-                        'Seção': `Página ${pageNum}`, // Ou tentar inferir seção se houver títulos
-                        'Descrição da Recomendação': recommendationText
-                    });
-                }
-            }
-            console.log(`Página ${pageNum}: ${recommendations.length} recomendações de texto encontradas.`);
-            return recommendations;
-        }
+        // Novas Recomendações (do seu Excel, parece ser a mesma estrutura do Corpo do Relatório, mas com menos colunas)
+        const novasHeaders = ['#', 'Estrutura', 'Descrição da Recomendação', 'Classificação', 'Tipo', 'Prazo'];
+        const novasColX = {
+            '#': 30,
+            'Estrutura': 60,
+            'Descrição da Recomendação': 200,
+            'Classificação': 450,
+            'Tipo': 550,
+            'Prazo': 600
+        };
+        const novasHeaderSearch = 'Local (página/seção) Texto original (trecho) Texto da recomendação (normalizada) ÁREA RESPONSAVEL COMENTÁRIO/ENCAMINHAMENTO'; // Pode ser o mesmo do corpo se for a mesma tabela
+
+        // Corpo do Relatório (do seu Excel)
+        const corpoHeaders = ['Local (página/seção)', 'Texto original (trecho)', 'Texto da recomendação (normalizada)', 'ÁREA RESPONSAVEL', 'COMENTÁRIO/ENCAMINHAMENTO'];
+        const corpoColX = {
+            'Local (página/seção)': 30,
+            'Texto original (trecho)': 150,
+            'Texto da recomendação (normalizada)': 350,
+            'ÁREA RESPONSAVEL': 550,
+            'COMENTÁRIO/ENCAMINHAMENTO': 650
+        };
+        const corpoHeaderSearch = 'Local (página/seção) Texto original (trecho) Texto da recomendação (normalizada) ÁREA RESPONSAVEL COMENTÁRIO/ENCAMINHAMENTO';
+
 
         // Função principal de processamento de PDF
         async function processPdfFile(file) {
@@ -503,6 +436,7 @@
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
             let currentAnexoIRows = [];
+            let currentNovasRecommendations = [];
             let currentCorpoRecommendations = [];
 
             for (let i = 1; i <= pdf.numPages; i++) {
@@ -511,29 +445,37 @@
                 const fullText = textContent.items.map(item => item.str).join(' ');
 
                 // Tentar extrair tabelas do Anexo I
-                const anexoRows = await extractAnexoITables(page, i);
+                const anexoRows = await extractTable(page, i, anexoIHeaders, anexoIColX, anexoIHeaderSearch, 'Anexo I');
                 currentAnexoIRows = currentAnexoIRows.concat(anexoRows);
 
-                // Tentar extrair recomendações do corpo do texto
-                const corpoRecs = findRecommendationsInText(fullText, i);
+                // Tentar extrair tabelas de Novas Recomendações
+                // ATENÇÃO: Se "Novas Recomendações" e "Corpo do Relatório" são a mesma tabela no PDF,
+                // você pode precisar de uma lógica para diferenciá-las ou apenas extrair uma vez.
+                // Por enquanto, vou extrair ambas usando a mesma lógica de tabela do corpo.
+                const corpoRecs = await extractTable(page, i, corpoHeaders, corpoColX, corpoHeaderSearch, 'Corpo do Relatório');
                 currentCorpoRecommendations = currentCorpoRecommendations.concat(corpoRecs);
+
+                // Para "Novas Recomendações", vamos pegar as mesmas do corpo e adaptar as colunas
+                // Isso é uma simplificação, você pode precisar de uma lógica mais específica
+                // se a tabela "Novas Recomendações" tiver um layout diferente no PDF.
+                const novasRecsFromCorpo = corpoRecs.map((rec, idx) => ({
+                    '#': rec['Local (página/seção)'] ? rec['Local (página/seção)'].match(/p\.(\d+)/)?.[1] || (idx + 1) : (idx + 1), // Tenta pegar a página ou um índice
+                    'Estrutura': rec['Local (página/seção)'] || '',
+                    'Descrição da Recomendação': rec['Texto da recomendação (normalizada)'] || '',
+                    'Classificação': '', // Não extraído automaticamente
+                    'Tipo': '', // Não extraído automaticamente
+                    'Prazo': '' // Não extraído automaticamente
+                }));
+                currentNovasRecommendations = currentNovasRecommendations.concat(novasRecsFromCorpo);
+
+                // Se houver recomendações de texto *fora* das tabelas, use a função findRecommendationsInText
+                // Por enquanto, vamos assumir que todas estão em tabelas.
+                // const textRecs = findRecommendationsInText(fullText, i);
+                // currentCorpoRecommendations = currentCorpoRecommendations.concat(textRecs);
             }
 
-            // Para simplificar, vamos considerar todas as recomendações de texto como "Novas Recomendações"
-            // e também como "Corpo do Relatório" por enquanto.
-            // A distinção entre "Novas" e "Corpo" no seu Excel original parece ser mais sobre a origem.
-            // Aqui, vamos usar a mesma lista para ambos, mas você pode refinar isso.
-            const novasRecs = currentCorpoRecommendations.map(rec => ({
-                '#': rec['#'],
-                'Estrutura': rec['Seção'], // Usando a seção como estrutura
-                'Descrição da Recomendação': rec['Descrição da Recomendação'],
-                'Classificação': '', // Não extraído automaticamente
-                'Tipo': '', // Não extraído automaticamente
-                'Prazo': '' // Não extraído automaticamente
-            }));
-
             extractedData.anexo = extractedData.anexo.concat(currentAnexoIRows);
-            extractedData.novas = extractedData.novas.concat(novasRecs);
+            extractedData.novas = extractedData.novas.concat(currentNovasRecommendations);
             extractedData.corpo = extractedData.corpo.concat(currentCorpoRecommendations);
 
             console.log(`Processamento de ${file.name} concluído.`);
@@ -608,13 +550,16 @@
             if (extractedData.corpo.length > 0) {
                 tableCorpoBody.innerHTML = extractedData.corpo.map(r => `
                     <tr>
-                        <td>${r['#'] || ''}</td>
-                        <td>${r['Seção'] || ''}</td>
-                        <td>${r['Descrição da Recomendação'] || ''}</td>
+                        <td>${r['Local (página/seção)'] ? r['Local (página/seção)'].match(/p\.(\d+)/)?.[1] || '' : ''}</td>
+                        <td>${r['Local (página/seção)'] || ''}</td>
+                        <td>${r['Texto original (trecho)'] || ''}</td>
+                        <td>${r['Texto da recomendação (normalizada)'] || ''}</td>
+                        <td>${r['ÁREA RESPONSAVEL'] || ''}</td>
+                        <td>${r['COMENTÁRIO/ENCAMINHAMENTO'] || ''}</td>
                     </tr>
                 `).join('');
             } else {
-                tableCorpoBody.innerHTML = '<tr><td colspan="3" class="empty">Nenhuma recomendação do corpo do relatório extraída ainda.</td></tr>';
+                tableCorpoBody.innerHTML = '<tr><td colspan="6" class="empty">Nenhuma recomendação do corpo do relatório extraída ainda.</td></tr>';
             }
         }
 
@@ -623,30 +568,30 @@
             const wb = XLSX.utils.book_new();
 
             // Aba Anexo I
-            const wsAnexoData = [['ID', 'Origem', 'Capítulo', 'Item', 'Assunto', 'Descrição', 'Classificação', 'Tipo', 'Prazo Atend. VALE', 'Último Prazo'],
-                                 ...extractedData.anexo.map(r => [r.ID, r.Origem, r.Capítulo, r.Item, r.Assunto, r.Descrição, r.Classificação, r.Tipo, r['Prazo Atend. VALE'], r['Último Prazo']])];
+            const wsAnexoData = [anexoIHeaders,
+                                 ...extractedData.anexo.map(r => anexoIHeaders.map(h => r[h] || ''))];
             const wsAnexo = XLSX.utils.aoa_to_sheet(wsAnexoData);
             wsAnexo['!cols'] = [10, 25, 20, 20, 20, 60, 15, 10, 15, 15].map(w => ({wch: w}));
             XLSX.utils.book_append_sheet(wb, wsAnexo, 'Anexo I');
 
             // Aba Novas Recomendações
-            const wsNovasData = [['#', 'Estrutura', 'Descrição da Recomendação', 'Classificação', 'Tipo', 'Prazo'],
-                                 ...extractedData.novas.map(r => [r['#'], r['Estrutura'], r['Descrição da Recomendação'], r['Classificação'], r['Tipo'], r['Prazo']])];
+            const wsNovasData = [novasHeaders,
+                                 ...extractedData.novas.map(r => novasHeaders.map(h => r[h] || ''))];
             const wsNovas = XLSX.utils.aoa_to_sheet(wsNovasData);
             wsNovas['!cols'] = [5, 25, 60, 15, 12, 12].map(w => ({wch: w}));
             XLSX.utils.book_append_sheet(wb, wsNovas, 'Novas Recomendações');
 
             // Aba Corpo do Relatório
-            const wsCorpoData = [['#', 'Seção', 'Descrição da Recomendação'],
-                                 ...extractedData.corpo.map(r => [r['#'], r['Seção'], r['Descrição da Recomendação']])];
+            const wsCorpoData = [corpoHeaders,
+                                 ...extractedData.corpo.map(r => corpoHeaders.map(h => r[h] || ''))];
             const wsCorpo = XLSX.utils.aoa_to_sheet(wsCorpoData);
-            wsCorpo['!cols'] = [5, 30, 80].map(w => ({wch: w}));
+            wsCorpo['!cols'] = [15, 25, 60, 25, 30].map(w => ({wch: w})); // Ajustei as larguras das colunas
             XLSX.utils.book_append_sheet(wb, wsCorpo, 'Corpo do Relatório');
 
             // Aba Sumário (simplificado, pois a lógica de contagem não foi totalmente adaptada)
             const wsSumData = [
                 ['Métrica', 'Valor'],
-                ['Total Histórico', extractedData.anexo.length + extractedData.novas.length],
+                ['Total Histórico', extractedData.anexo.length + extractedData.novas.length + extractedData.corpo.length],
                 ['Em Aberto', '-'],
                 ['Concluídas', '-'],
                 ['Canceladas', '-'],
