@@ -4,16 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Extrator de Recomendações AECOM v18.0</title>
-    <!-- Favicon para evitar erro 404 no console -->
+    <!-- Favicon para evitar erro 404 -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>">
 
-    <!-- Bibliotecas externas -->
+    <!-- CDNs para pdf.js e xlsx -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
-    <!-- pdf.worker.min.js deve ser carregado separadamente e pdf.js precisa saber onde encontrá-lo -->
-    <script>
-        // Define o caminho para o worker, importante para pdf.js funcionar corretamente
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
-    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <style>
@@ -48,38 +44,56 @@
         .box { background: #f5f7fa; border-radius: 8px; padding: 16px; text-align: center; }
         .box p { font-size: 24px; font-weight: bold; color: #1a3a5c; margin-bottom: 8px; }
         .box span { font-size: 14px; color: #666; }
-        table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
-        th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
-        th { background: #1a3a5c; color: white; }
-        tr:nth-child(even) { background: #f8f8f8; }
-        .tab-nav { display: flex; border-bottom: 1px solid #ddd; margin-bottom: 16px; }
-        .tab-btn {
-            padding: 10px 15px; cursor: pointer; border: none; background: none;
-            font-size: 16px; color: #555; transition: color 0.2s, border-bottom 0.2s;
+        .file-list { list-style: none; padding: 0; margin-top: 16px; max-height: 200px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px; }
+        .file-list li {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 16px; border-bottom: 1px solid #eee;
+            background: #fff;
         }
-        .tab-btn:hover { color: #1a3a5c; }
+        .file-list li:last-child { border-bottom: none; }
+        .file-list li span { flex-grow: 1; text-align: left; }
+        .file-list li button {
+            background: #dc3545; color: white; border: none; padding: 4px 8px;
+            border-radius: 4px; cursor: pointer; font-size: 12px;
+        }
+        .file-list li button:hover { background: #c82333; }
+        .tab-nav { display: flex; border-bottom: 1px solid #ddd; margin-bottom: 20px; }
+        .tab-btn {
+            padding: 10px 20px; cursor: pointer; border: none; background: none;
+            font-size: 16px; color: #555; border-bottom: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        .tab-btn:hover { color: #2d6a9f; }
         .tab-btn.active {
-            color: #1a3a5c; border-bottom: 2px solid #1a3a5c; font-weight: bold;
+            color: #2d6a9f; border-bottom-color: #2d6a9f; font-weight: bold;
         }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .file-list { list-style: none; padding: 0; margin-top: 16px; }
-        .file-list li {
-            background: #f5f7fa; border-radius: 4px; padding: 8px 12px;
-            margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
+        .results-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .results-table th, .results-table td {
+            border: 1px solid #ddd; padding: 8px; text-align: left;
+            font-size: 14px;
         }
-        .file-list li .remove-btn {
-            background: #dc3545; color: white; border: none; border-radius: 4px;
-            padding: 4px 8px; cursor: pointer; font-size: 12px;
-        }
-        .file-list li .remove-btn:hover { background: #c82333; }
+        .results-table th { background-color: #f2f2f2; font-weight: bold; }
+        .status-message { margin-top: 15px; padding: 10px; border-radius: 5px; }
+        .status-message.success { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
+        .status-message.error { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
         .progress-bar-container {
-            width: 100%; background-color: #e0e0e0; border-radius: 5px; margin-top: 10px;
-            display: none; /* Escondido por padrão */
+            width: 100%;
+            background-color: #e0e0e0;
+            border-radius: 5px;
+            margin-top: 10px;
+            height: 20px;
+            overflow: hidden;
         }
         .progress-bar {
-            width: 0%; height: 20px; background-color: #2d6a9f; border-radius: 5px;
-            text-align: center; line-height: 20px; color: white; font-size: 12px;
+            height: 100%;
+            width: 0%;
+            background-color: #2d6a9f;
+            text-align: center;
+            color: white;
+            line-height: 20px;
+            transition: width 0.3s ease-in-out;
         }
     </style>
 </head>
@@ -92,37 +106,48 @@
         <div class="section">
             <h2>1. Carregar PDFs</h2>
             <div id="dropZone" class="drop-zone">
-                Arraste e solte seus arquivos PDF aqui, ou clique para selecionar.
+                Arraste e solte PDFs aqui ou clique para selecionar
                 <input type="file" id="pdfInput" accept=".pdf" multiple hidden>
             </div>
             <ul id="fileList" class="file-list"></ul>
             <button id="processPdfsBtn" class="btn" disabled>Processar PDFs</button>
-            <div id="progressBarContainer" class="progress-bar-container">
+            <div id="progressBarContainer" class="progress-bar-container" style="display: none;">
                 <div id="progressBar" class="progress-bar">0%</div>
             </div>
+            <div id="statusMessage" class="status-message" style="display: none;"></div>
         </div>
 
         <div class="section">
             <h2>2. Resultados da Extração</h2>
             <div class="grid">
-                <div class="box"><p id="totalAnexoI">0</p><span>Recomendações Anexo I</span></div>
-                <div class="box"><p id="totalNovas">0</p><span>Novas Recomendações</span></div>
-                <div class="box"><p id="totalCorpo">0</p><span>Recomendações Corpo</span></div>
+                <div class="box">
+                    <p id="totalAnexoI">0</p>
+                    <span>Recomendações Anexo I</span>
+                </div>
+                <div class="box">
+                    <p id="totalCorpo">0</p>
+                    <span>Recomendações Corpo do Relatório</span>
+                </div>
+                <div class="box">
+                    <p id="totalNovas">0</p>
+                    <span>Novas Recomendações</span>
+                </div>
+                <div class="box">
+                    <p id="totalGeral">0</p>
+                    <span>Total Geral</span>
+                </div>
             </div>
             <button id="exportExcelBtn" class="btn btn-export" disabled>Exportar para Excel</button>
-        </div>
 
-        <div class="section">
-            <h2>3. Visualização Detalhada</h2>
             <div class="tab-nav">
-                <button class="tab-btn active" data-tab="anexoI">Anexo I</button>
-                <button class="tab-btn" data-tab="novas">Novas Recomendações</button>
+                <button class="tab-btn active" data-tab="anexo">Anexo I</button>
                 <button class="tab-btn" data-tab="corpo">Corpo do Relatório</button>
+                <button class="tab-btn" data-tab="novas">Novas Recomendações</button>
             </div>
 
-            <div id="tabAnexoI" class="tab-content active">
+            <div id="tabAnexo" class="tab-content active">
                 <h3>Recomendações do Anexo I</h3>
-                <table id="tableAnexoI">
+                <table class="results-table">
                     <thead>
                         <tr>
                             <th>ID</th>
@@ -137,25 +162,7 @@
                             <th>Último Prazo</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <!-- Dados serão inseridos aqui -->
-                    </tbody>
-                </table>
-            </div>
-
-            <div id="tabNovas" class="tab-content">
-                <h3>Novas Recomendações</h3>
-                <table id="tableNovas">
-                    <thead>
-                        <tr>
-                            <th>Local (página/seção)</th>
-                            <th>Texto original (trecho)</th>
-                            <th>Texto da recomendação (normalizada)</th>
-                            <th>ÁREA RESPONSAVEL</th>
-                            <th>COMENTÁRIO/ENCAMINHAMENTO</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                    <tbody id="anexoITableBody">
                         <!-- Dados serão inseridos aqui -->
                     </tbody>
                 </table>
@@ -163,7 +170,7 @@
 
             <div id="tabCorpo" class="tab-content">
                 <h3>Recomendações do Corpo do Relatório</h3>
-                <table id="tableCorpo">
+                <table class="results-table">
                     <thead>
                         <tr>
                             <th>Local (página/seção)</th>
@@ -173,7 +180,25 @@
                             <th>COMENTÁRIO/ENCAMINHAMENTO</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="corpoRelatorioTableBody">
+                        <!-- Dados serão inseridos aqui -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="tabNovas" class="tab-content">
+                <h3>Novas Recomendações</h3>
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th>Local (página/seção)</th>
+                            <th>Texto original (trecho)</th>
+                            <th>Texto da recomendação (normalizada)</th>
+                            <th>ÁREA RESPONSAVEL</th>
+                            <th>COMENTÁRIO/ENCAMINHAMENTO</th>
+                        </tr>
+                    </thead>
+                    <tbody id="novasRecomendacoesTableBody">
                         <!-- Dados serão inseridos aqui -->
                     </tbody>
                 </table>
@@ -182,100 +207,99 @@
     </div>
 
     <script>
-        let pdfFiles = [];
-        let allExtractedData = {
-            anexo: [],
-            novas: [],
-            corpo: []
-        };
+        // Configura o worker do pdf.js explicitamente
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
+        }
 
-        // --- Elementos do DOM ---
-        const dropZone = document.getElementById('dropZone');
         const pdfInput = document.getElementById('pdfInput');
+        const dropZone = document.getElementById('dropZone');
         const fileList = document.getElementById('fileList');
         const processPdfsBtn = document.getElementById('processPdfsBtn');
         const exportExcelBtn = document.getElementById('exportExcelBtn');
-        const totalAnexoI = document.getElementById('totalAnexoI');
-        const totalNovas = document.getElementById('totalNovas');
-        const totalCorpo = document.getElementById('totalCorpo');
-        const tableAnexoI = document.getElementById('tableAnexoI').getElementsByTagName('tbody')[0];
-        const tableNovas = document.getElementById('tableNovas').getElementsByTagName('tbody')[0];
-        const tableCorpo = document.getElementById('tableCorpo').getElementsByTagName('tbody')[0];
         const progressBarContainer = document.getElementById('progressBarContainer');
         const progressBar = document.getElementById('progressBar');
+        const statusMessage = document.getElementById('statusMessage');
+
+        let selectedFiles = [];
+        let allExtractedData = {
+            anexo: [],
+            corpo: [],
+            novas: []
+        };
 
         // --- Funções de UI ---
         function updateFileList() {
             fileList.innerHTML = '';
-            if (pdfFiles.length === 0) {
+            if (selectedFiles.length === 0) {
                 fileList.innerHTML = '<li>Nenhum PDF selecionado.</li>';
                 processPdfsBtn.disabled = true;
             } else {
-                pdfFiles.forEach((file, index) => {
+                selectedFiles.forEach((file, index) => {
                     const li = document.createElement('li');
-                    li.textContent = file.name;
-                    const removeBtn = document.createElement('button');
-                    removeBtn.textContent = 'Remover';
-                    removeBtn.className = 'remove-btn';
-                    removeBtn.onclick = () => removeFile(index);
-                    li.appendChild(removeBtn);
+                    li.innerHTML = `
+                        <span>${file.name}</span>
+                        <button data-index="${index}">Remover</button>
+                    `;
                     fileList.appendChild(li);
                 });
                 processPdfsBtn.disabled = false;
             }
         }
 
-        function removeFile(index) {
-            pdfFiles.splice(index, 1);
-            updateFileList();
-            resetResults();
-        }
-
-        function resetResults() {
-            allExtractedData = { anexo: [], novas: [], corpo: [] };
-            updateResultsDisplay();
-            tableAnexoI.innerHTML = '';
-            tableNovas.innerHTML = '';
-            tableCorpo.innerHTML = '';
-            exportExcelBtn.disabled = true;
-            progressBarContainer.style.display = 'none';
-            progressBar.style.width = '0%';
-            progressBar.textContent = '0%';
-        }
-
         function updateResultsDisplay() {
-            totalAnexoI.textContent = allExtractedData.anexo.length;
-            totalNovas.textContent = allExtractedData.novas.length;
-            totalCorpo.textContent = allExtractedData.corpo.length;
+            document.getElementById('totalAnexoI').textContent = allExtractedData.anexo.length;
+            document.getElementById('totalCorpo').textContent = allExtractedData.corpo.length;
+            document.getElementById('totalNovas').textContent = allExtractedData.novas.length;
+            document.getElementById('totalGeral').textContent = allExtractedData.anexo.length + allExtractedData.corpo.length + allExtractedData.novas.length;
 
-            // Preencher tabelas de visualização
-            renderTable(tableAnexoI, allExtractedData.anexo, [
-                'ID', 'Origem', 'Capítulo', 'Item', 'Assunto', 'Descrição',
-                'Classificação', 'Tipo', 'Prazo de Atendimento VALE', 'Último Prazo'
-            ]);
-            renderTable(tableNovas, allExtractedData.novas, [
-                'Local (página/seção)', 'Texto original (trecho)', 'Texto da recomendação (normalizada)',
-                'ÁREA RESPONSAVEL', 'COMENTÁRIO/ENCAMINHAMENTO'
-            ]);
-            renderTable(tableCorpo, allExtractedData.corpo, [
-                'Local (página/seção)', 'Texto original (trecho)', 'Texto da recomendação (normalizada)',
-                'ÁREA RESPONSAVEL', 'COMENTÁRIO/ENCAMINHAMENTO'
-            ]);
+            renderTable('anexoITableBody', allExtractedData.anexo, ['ID', 'Origem', 'Capítulo', 'Item', 'Assunto', 'Descrição', 'Classificação', 'Tipo', 'Prazo de Atendimento VALE', 'Último Prazo']);
+            renderTable('corpoRelatorioTableBody', allExtractedData.corpo, ['Local (página/seção)', 'Texto original (trecho)', 'Texto da recomendação (normalizada)', 'ÁREA RESPONSAVEL', 'COMENTÁRIO/ENCAMINHAMENTO']);
+            renderTable('novasRecomendacoesTableBody', allExtractedData.novas, ['Local (página/seção)', 'Texto original (trecho)', 'Texto da recomendação (normalizada)', 'ÁREA RESPONSAVEL', 'COMENTÁRIO/ENCAMINHAMENTO']);
 
-            exportExcelBtn.disabled = (allExtractedData.anexo.length + allExtractedData.novas.length + allExtractedData.corpo.length === 0);
+            exportExcelBtn.disabled = (allExtractedData.anexo.length + allExtractedData.corpo.length + allExtractedData.novas.length) === 0;
         }
 
-        function renderTable(tableBodyElement, data, headers) {
-            tableBodyElement.innerHTML = '';
+        function renderTable(tableBodyId, data, headers) {
+            const tbody = document.getElementById(tableBodyId);
+            tbody.innerHTML = '';
+            if (data.length === 0) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td colspan="${headers.length}" style="text-align: center;">Nenhuma recomendação encontrada.</td>`;
+                tbody.appendChild(tr);
+                return;
+            }
             data.forEach(row => {
                 const tr = document.createElement('tr');
                 headers.forEach(header => {
                     const td = document.createElement('td');
-                    td.textContent = row[header] || ''; // Exibe valor ou string vazia se undefined
+                    td.textContent = row[header] || '';
                     tr.appendChild(td);
                 });
-                tableBodyElement.appendChild(tr);
+                tbody.appendChild(tr);
             });
+        }
+
+        function showStatus(message, type = 'info') {
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message ${type}`;
+            statusMessage.style.display = 'block';
+        }
+
+        function hideStatus() {
+            statusMessage.style.display = 'none';
+        }
+
+        function updateProgressBar(progress) {
+            progressBarContainer.style.display = 'block';
+            progressBar.style.width = `${progress}%`;
+            progressBar.textContent = `${Math.round(progress)}%`;
+        }
+
+        function hideProgressBar() {
+            progressBarContainer.style.display = 'none';
+            progressBar.style.width = '0%';
+            progressBar.textContent = '0%';
         }
 
         // --- Event Listeners para UI ---
@@ -294,188 +318,254 @@
         });
         pdfInput.addEventListener('change', (e) => addFiles(e.target.files));
 
-        function addFiles(files) {
-            for (let i = 0; i < files.length; i++) {
-                if (files[i].type === 'application/pdf') {
-                    pdfFiles.push(files[i]);
-                }
+        fileList.addEventListener('click', (e) => {
+            if (e.target.tagName === 'BUTTON') {
+                const index = parseInt(e.target.dataset.index);
+                selectedFiles.splice(index, 1);
+                updateFileList();
             }
-            updateFileList();
-            resetResults();
-        }
-
-        processPdfsBtn.addEventListener('click', async () => {
-            if (pdfFiles.length === 0) return;
-
-            resetResults(); // Limpa resultados anteriores
-            processPdfsBtn.disabled = true;
-            exportExcelBtn.disabled = true;
-            progressBarContainer.style.display = 'block';
-
-            let processedCount = 0;
-            for (const file of pdfFiles) {
-                try {
-                    const extracted = await processPDF(file);
-                    allExtractedData.anexo.push(...extracted.anexo);
-                    allExtractedData.novas.push(...extracted.novas);
-                    allExtractedData.corpo.push(...extracted.corpo);
-                    console.log(`Processamento de ${file.name} concluído.`);
-                } catch (error) {
-                    console.error(`Erro ao processar ${file.name}:`, error);
-                    alert(`Erro ao processar ${file.name}: ${error.message}. Verifique o console para mais detalhes.`);
-                } finally {
-                    processedCount++;
-                    const progress = (processedCount / pdfFiles.length) * 100;
-                    progressBar.style.width = `${progress}%`;
-                    progressBar.textContent = `${Math.round(progress)}%`;
-                }
-            }
-            updateResultsDisplay();
-            processPdfsBtn.disabled = false;
-            exportExcelBtn.disabled = false;
-            alert('Processamento de todos os PDFs concluído!');
         });
 
-        exportExcelBtn.addEventListener('click', () => {
-            if (allExtractedData.anexo.length === 0 && allExtractedData.novas.length === 0 && allExtractedData.corpo.length === 0) {
-                alert('Nenhum dado para exportar.');
+        processPdfsBtn.addEventListener('click', async () => {
+            if (selectedFiles.length === 0) {
+                showStatus('Nenhum PDF selecionado para processar.', 'error');
                 return;
             }
 
-            const wb = XLSX.utils.book_new();
+            allExtractedData = { anexo: [], corpo: [], novas: [] };
+            updateResultsDisplay();
+            hideStatus();
+            updateProgressBar(0);
+            processPdfsBtn.disabled = true;
+            exportExcelBtn.disabled = true;
 
-            // Aba Anexo I
-            const anexoIHeaders = [
-                'ID', 'Origem', 'Capítulo', 'Item', 'Assunto', 'Descrição',
-                'Classificação', 'Tipo', 'Prazo de Atendimento VALE', 'Último Prazo'
-            ];
-            const wsAnexoIData = [anexoIHeaders,
-                                  ...allExtractedData.anexo.map(r => anexoIHeaders.map(h => r[h] || ''))];
-            const wsAnexoI = XLSX.utils.aoa_to_sheet(wsAnexoIData);
-            wsAnexoI['!cols'] = [5, 15, 15, 10, 20, 40, 15, 10, 20, 20].map(w => ({wch: w}));
-            XLSX.utils.book_append_sheet(wb, wsAnexoI, 'Anexo I');
+            let processedCount = 0;
+            for (const file of selectedFiles) {
+                try {
+                    showStatus(`Processando ${file.name}...`, 'info');
+                    const data = await processPDF(file);
+                    allExtractedData.anexo.push(...data.anexo);
+                    allExtractedData.corpo.push(...data.corpo);
+                    allExtractedData.novas.push(...data.novas);
+                    processedCount++;
+                    updateProgressBar((processedCount / selectedFiles.length) * 100);
+                } catch (error) {
+                    console.error(`Erro ao processar ${file.name}:`, error);
+                    showStatus(`Erro ao processar ${file.name}: ${error.message}`, 'error');
+                    // Não interrompe o processamento dos outros arquivos
+                }
+            }
 
-            // Aba Novas Recomendações e Corpo do Relatório (usando os mesmos headers do Excel fornecido)
-            const novasCorpoHeaders = [
-                'Local (página/seção)', 'Texto original (trecho)', 'Texto da recomendação (normalizada)',
-                'ÁREA RESPONSAVEL', 'COMENTÁRIO/ENCAMINHAMENTO'
-            ];
-            const wsNovas = XLSX.utils.aoa_to_sheet([novasCorpoHeaders,
-                                                     ...allExtractedData.novas.map(r => novasCorpoHeaders.map(h => r[h] || ''))]);
-            wsNovas['!cols'] = [25, 60, 60, 25, 30].map(w => ({wch: w}));
-            XLSX.utils.book_append_sheet(wb, wsNovas, 'Novas Recomendações');
-
-            const wsCorpo = XLSX.utils.aoa_to_sheet([novasCorpoHeaders,
-                                                     ...allExtractedData.corpo.map(r => novasCorpoHeaders.map(h => r[h] || ''))]);
-            wsCorpo['!cols'] = [25, 60, 60, 25, 30].map(w => ({wch: w}));
-            XLSX.utils.book_append_sheet(wb, wsCorpo, 'Corpo do Relatório');
-
-            // Aba Sumário
-            const wsSumData = [
-                ['Métrica', 'Valor'],
-                ['Total Histórico', allExtractedData.anexo.length + allExtractedData.novas.length + allExtractedData.corpo.length],
-                ['Em Aberto', '-'],
-                ['Concluídas', '-'],
-                ['Canceladas', '-'],
-                ['', ''],
-                ['Situação - Em Aberto', ''],
-                ['Atrasadas', '-'],
-                ['Vence este mês', '-'],
-                ['Em andamento', '-'],
-                ['Programadas', '-'],
-                ['Novas', allExtractedData.novas.length],
-                ['', ''],
-                ['Novas recomendações extraídas', allExtractedData.novas.length],
-                ['Recomendações no corpo', allExtractedData.corpo.length],
-                ['Recomendações Anexo I', allExtractedData.anexo.length],
-            ];
-            const wsSum = XLSX.utils.aoa_to_sheet(wsSumData);
-            wsSum['!cols'] = [30, 10].map(w => ({wch: w}));
-            XLSX.utils.book_append_sheet(wb, wsSum, 'Sumário');
-
-            const now = new Date();
-            const stamp = now.toISOString().slice(0, 10);
-            XLSX.writeFile(wb, `recomendacoes_aecom_${stamp}.xlsx`);
+            showStatus('Processamento de todos os PDFs concluído.', 'success');
+            updateResultsDisplay();
+            processPdfsBtn.disabled = false;
+            hideProgressBar();
         });
 
-        // --- Funções de Extração de PDF ---
+        exportExcelBtn.addEventListener('click', () => {
+            exportToExcel(allExtractedData);
+        });
+
+        function addFiles(files) {
+            for (const file of files) {
+                if (file.type === 'application/pdf') {
+                    selectedFiles.push(file);
+                } else {
+                    showStatus(`O arquivo ${file.name} não é um PDF e foi ignorado.`, 'warning');
+                }
+            }
+            updateFileList();
+        }
+
+        // --- Lógica de Processamento de PDF ---
         async function processPDF(file) {
             const reader = new FileReader();
             return new Promise((resolve, reject) => {
-                reader.onload = async (event) => {
+                reader.onload = async () => {
                     try {
-                        const pdfData = new Uint8Array(event.target.result);
-                        const loadingTask = pdfjsLib.getDocument({ data: pdfData });
-                        const pdf = await loadingTask.promise;
+                        const pdfData = new Uint8Array(reader.result);
+                        const pdfDoc = await pdfjsLib.getDocument({ data: pdfData }).promise;
+                        const extracted = { anexo: [], corpo: [], novas: [] };
 
-                        let anexoIData = [];
-                        let novasData = [];
-                        let corpoData = [];
-
-                        // Headers esperados para as tabelas (baseado no seu Excel)
-                        const anexoIHeaders = [
-                            'ID', 'Origem', 'Capítulo', 'Item', 'Assunto', 'Descrição',
-                            'Classificação', 'Tipo', 'Prazo de Atendimento VALE', 'Último Prazo'
-                        ];
-                        const novasCorpoHeaders = [
-                            'Local (página/seção)', 'Texto original (trecho)', 'Texto da recomendação (normalizada)',
-                            'ÁREA RESPONSAVEL', 'COMENTÁRIO/ENCAMINHAMENTO'
-                        ];
-
-                        for (let i = 1; i <= pdf.numPages; i++) {
-                            const page = await pdf.getPage(i);
+                        // --- Funções de extração de tabela (agora aninhadas em processPDF) ---
+                        async function extractTableFromPage(page, headerKeywords, columnHeaders, pageNum, tableType) {
                             const textContent = await page.getTextContent();
-                            const items = textContent.items;
+                            const textItems = textContent.items;
 
-                            // Função auxiliar para extrair texto e posições
-                            const extractTextItems = (items) => {
-                                return items.map(item => ({
-                                    str: item.str,
-                                    x: item.transform[4],
-                                    y: item.transform[5],
-                                    width: item.width,
-                                    height: item.height,
-                                    fontName: item.fontName,
-                                    dir: item.dir
-                                }));
-                            };
-                            const pageTextItems = extractTextItems(items);
+                            // 1. Encontrar o cabeçalho da tabela
+                            let headerY = -1;
+                            let headerTextFound = false;
+                            let headerTextItems = [];
 
-                            // Tentar extrair tabelas do Anexo I
-                            const extractedAnexoI = extractTableFromPage(pageTextItems, anexoIHeaders, 'Anexo I');
-                            if (extractedAnexoI.length > 0) {
-                                anexoIData.push(...extractedAnexoI);
-                                console.log(`Página ${i}: ${extractedAnexoI.length} recomendações do Anexo I encontradas.`);
-                            } else {
-                                console.log(`Página ${i}: Cabeçalho da tabela "Anexo I" não encontrado ou tabela vazia.`);
+                            // Tenta encontrar o cabeçalho completo ou partes dele
+                            const pageText = textItems.map(item => item.str).join(' ');
+                            const headerRegex = new RegExp(headerKeywords.join('.*?'), 'i'); // Regex flexível
+                            if (headerRegex.test(pageText)) {
+                                headerTextFound = true;
+                                // Tenta encontrar a linha do cabeçalho
+                                for (const item of textItems) {
+                                    if (headerKeywords.some(keyword => item.str.toLowerCase().includes(keyword.toLowerCase()))) {
+                                        headerTextItems.push(item);
+                                        if (headerY === -1) headerY = item.y;
+                                    }
+                                }
+                                // Se encontrou itens, refine o Y do cabeçalho para a linha mais alta
+                                if (headerTextItems.length > 0) {
+                                    headerY = Math.max(...headerTextItems.map(item => item.y));
+                                }
                             }
 
-                            // Tentar extrair tabelas de Novas Recomendações / Corpo do Relatório
-                            // Usamos a mesma lógica de detecção para ambas, pois os headers são os mesmos no seu Excel
-                            const extractedNovasCorpo = extractTableFromPage(pageTextItems, novasCorpoHeaders, 'Novas Recomendações/Corpo');
-                            if (extractedNovasCorpo.length > 0) {
-                                // Precisamos de uma forma de diferenciar se é "Novas" ou "Corpo"
-                                // Por enquanto, vamos assumir que se o cabeçalho for encontrado,
-                                // ele pode ser de qualquer um dos dois tipos.
-                                // Uma heurística melhor seria verificar o texto ANTES do cabeçalho da tabela.
-                                // Por simplicidade, vamos adicionar tudo a 'novas' por enquanto,
-                                // e você pode ajustar a lógica de diferenciação se necessário.
-                                novasData.push(...extractedNovasCorpo);
-                                console.log(`Página ${i}: ${extractedNovasCorpo.length} recomendações de Novas/Corpo encontradas.`);
-                            } else {
-                                console.log(`Página ${i}: Cabeçalho da tabela "Novas Recomendações/Corpo" não encontrado ou tabela vazia.`);
+                            if (!headerTextFound || headerY === -1) {
+                                console.log(`Página ${pageNum}: Cabeçalho da tabela "${tableType}" não encontrado.`);
+                                return [];
                             }
 
-                            // Limpar a página para liberar memória
-                            page.cleanup();
+                            // 2. Determinar as faixas X das colunas com base nos itens do cabeçalho
+                            // Agrupar itens do cabeçalho por Y para pegar a linha mais alta
+                            const headerLineItems = headerTextItems.filter(item => Math.abs(item.y - headerY) < 5) // Dentro de uma pequena margem Y
+                                                                   .sort((a, b) => a.x - b.x);
+
+                            const columnXRanges = [];
+                            if (headerLineItems.length > 0) {
+                                for (let i = 0; i < columnHeaders.length; i++) {
+                                    const headerKeyword = columnHeaders[i];
+                                    const matchingItems = headerLineItems.filter(item => item.str.toLowerCase().includes(headerKeyword.toLowerCase()));
+
+                                    if (matchingItems.length > 0) {
+                                        const firstItemX = Math.min(...matchingItems.map(item => item.x));
+                                        const lastItemX = Math.max(...matchingItems.map(item => item.x + item.width));
+
+                                        // Estender a faixa X para a próxima coluna ou final da página
+                                        let endX;
+                                        if (i + 1 < columnHeaders.length) {
+                                            const nextHeaderKeyword = columnHeaders[i + 1];
+                                            const nextMatchingItems = headerLineItems.filter(item => item.str.toLowerCase().includes(nextHeaderKeyword.toLowerCase()));
+                                            if (nextMatchingItems.length > 0) {
+                                                endX = Math.min(...nextMatchingItems.map(item => item.x));
+                                            } else {
+                                                endX = page.getViewport({ scale: 1 }).width; // Fim da página se não encontrar o próximo cabeçalho
+                                            }
+                                        } else {
+                                            endX = page.getViewport({ scale: 1 }).width; // Fim da página para a última coluna
+                                        }
+                                        columnXRanges.push({ start: firstItemX, end: endX });
+                                    } else {
+                                        // Se um cabeçalho não for encontrado, tente estimar a faixa X
+                                        // Isso é um fallback e pode não ser preciso
+                                        if (columnXRanges.length > 0) {
+                                            const lastRange = columnXRanges[columnXRanges.length - 1];
+                                            columnXRanges.push({ start: lastRange.end, end: lastRange.end + 100 }); // Heurística
+                                        } else {
+                                            columnXRanges.push({ start: 0, end: 100 }); // Heurística para a primeira coluna
+                                        }
+                                    }
+                                }
+                            } else {
+                                console.warn(`Página ${pageNum}: Não foi possível determinar faixas X para "${tableType}" com base nos itens do cabeçalho. Tentando heurística.`);
+                                // Fallback: dividir a página em colunas de largura igual
+                                const pageWidth = page.getViewport({ scale: 1 }).width;
+                                const colWidth = pageWidth / columnHeaders.length;
+                                for (let i = 0; i < columnHeaders.length; i++) {
+                                    columnXRanges.push({ start: i * colWidth, end: (i + 1) * colWidth });
+                                }
+                            }
+
+
+                            const extractedRows = [];
+                            // 3. Extrair as linhas de dados abaixo do cabeçalho
+                            // Filtrar itens de texto que estão abaixo do cabeçalho
+                            const dataItems = textItems.filter(item => item.y < headerY - 5); // 5 é uma margem para garantir que não pegue o cabeçalho
+
+                            // Agrupar itens de dados por linha (y-coordenada)
+                            const dataLines = {};
+                            dataItems.forEach(item => {
+                                const y = Math.round(item.y);
+                                if (!dataLines[y]) dataLines[y] = [];
+                                dataLines[y].push(item);
+                            });
+
+                            const sortedDataYCoords = Object.keys(dataLines).sort((a, b) => b - a); // Do topo para baixo
+
+                            let currentRow = {};
+                            let lastY = -1;
+
+                            for (const y of sortedDataYCoords) {
+                                const lineItems = dataLines[y].sort((a, b) => a.x - b.x);
+
+                                // Se a linha atual está muito distante da anterior, pode ser o início de uma nova linha de dados
+                                // Ou se é a primeira linha de dados
+                                if (lastY === -1 || (lastY - parseFloat(y)) > 15) { // 15 é uma heurística para espaçamento entre linhas
+                                    if (Object.keys(currentRow).length > 0) {
+                                        extractedRows.push(currentRow);
+                                    }
+                                    currentRow = {};
+                                }
+
+                                // Preencher as células da linha atual
+                                for (let i = 0; i < columnHeaders.length; i++) {
+                                    const header = columnHeaders[i];
+                                    const range = columnXRanges[i];
+
+                                    const cellTextItems = lineItems.filter(item => item.x >= range.start && item.x < range.end);
+                                    const cellText = cellTextItems.map(item => item.str).join(' ').trim();
+
+                                    if (cellText) {
+                                        currentRow[header] = (currentRow[header] ? currentRow[header] + ' ' : '') + cellText;
+                                    }
+                                }
+                                lastY = parseFloat(y);
+                            }
+                            if (Object.keys(currentRow).length > 0) {
+                                extractedRows.push(currentRow);
+                            }
+
+                            // Filtrar linhas vazias ou incompletas
+                            return extractedRows.filter(row => Object.keys(row).length > 0 && columnHeaders.some(h => row[h]));
                         }
 
-                        resolve({
-                            anexo: anexoIData,
-                            novas: novasData,
-                            corpo: corpoData // Corpo do relatório está sendo extraído junto com Novas por enquanto
-                        });
+                        async function extractAnexoITables(page, pageNum) {
+                            const anexoIHeaders = ['ID', 'Origem', 'Capítulo', 'Item', 'Assunto', 'Descrição', 'Classificação', 'Tipo', 'Prazo de Atendimento VALE', 'Último Prazo'];
+                            const headerKeywords = ['ID', 'Origem', 'Capítulo', 'Item', 'Assunto', 'Descrição', 'Classificação', 'Tipo', 'Prazo', 'Último Prazo']; // Palavras-chave para detecção
+                            return await extractTableFromPage(page, headerKeywords, anexoIHeaders, pageNum, 'Anexo I');
+                        }
 
+                        async function extractCorpoRelatorioTables(page, pageNum) {
+                            const corpoHeaders = ['Local (página/seção)', 'Texto original (trecho)', 'Texto da recomendação (normalizada)', 'ÁREA RESPONSAVEL', 'COMENTÁRIO/ENCAMINHAMENTO'];
+                            const headerKeywords = ['Local', 'Texto original', 'Texto da recomendação', 'ÁREA RESPONSAVEL', 'COMENTÁRIO/ENCAMINHAMENTO']; // Palavras-chave para detecção
+                            return await extractTableFromPage(page, headerKeywords, corpoHeaders, pageNum, 'Corpo do Relatório');
+                        }
+                        // --- Fim das funções de extração de tabela ---
+
+
+                        for (let i = 1; i <= pdfDoc.numPages; i++) {
+                            const page = await pdfDoc.getPage(i);
+                            const pageTextContent = await page.getTextContent();
+                            const pageText = pageTextContent.items.map(item => item.str).join(' ');
+
+                            // Extração de tabelas
+                            const anexoITableData = await extractAnexoITables(page, i);
+                            extracted.anexo.push(...anexoITableData);
+
+                            const corpoRelatorioTableData = await extractCorpoRelatorioTables(page, i);
+                            extracted.corpo.push(...corpoRelatorioTableData);
+
+                            // Extração de "Novas Recomendações" (fora das tabelas, se houver)
+                            // Esta regex é um exemplo e pode precisar de ajuste fino
+                            const novasRecomendacoesRegex = /(?:Nova Recomendação|Recomendação Nova):\s*(.*?)(?=\n|
+$
+)/gi;
+                            let match;
+                            while ((match = novasRecomendacoesRegex.exec(pageText)) !== null) {
+                                extracted.novas.push({
+                                    'Local (página/seção)': `Página ${i}`,
+                                    'Texto original (trecho)': match[0],
+                                    'Texto da recomendação (normalizada)': match[1].trim(),
+                                    'ÁREA RESPONSAVEL': '', // Preencher se puder ser extraído
+                                    'COMENTÁRIO/ENCAMINHAMENTO': '' // Preencher se puder ser extraído
+                                });
+                            }
+                        }
+                        resolve(extracted);
                     } catch (error) {
                         reject(error);
                     }
@@ -485,124 +575,57 @@
             });
         }
 
-        /**
-         * Tenta extrair uma tabela de uma página PDF baseando-se nos cabeçalhos fornecidos.
-         * Esta é uma função heurística e pode precisar de ajustes finos.
-         * @param {Array} pageTextItems - Array de objetos de texto com str, x, y, width, height.
-         * @param {Array} expectedHeaders - Array de strings dos cabeçalhos esperados da tabela.
-         * @param {string} tableName - Nome da tabela para logs.
-         * @returns {Array} Array de objetos representando as linhas da tabela.
-         */
-        function extractTableFromPage(pageTextItems, expectedHeaders, tableName) {
-            const extractedRows = [];
-            let headerY = -1;
-            let headerXs = [];
-            let headerFound = false;
+        // --- Lógica de Exportação para Excel ---
+        function exportToExcel(data) {
+            const wb = XLSX.utils.book_new();
 
-            // 1. Tentar encontrar a linha do cabeçalho
-            // Agrupar itens de texto por linha (y-coordenada)
-            const lines = {};
-            pageTextItems.forEach(item => {
-                const y = Math.round(item.y); // Arredondar Y para agrupar linhas próximas
-                if (!lines[y]) lines[y] = [];
-                lines[y].push(item);
-            });
+            // Aba Anexo I
+            const anexoIHeaders = ['ID', 'Origem', 'Capítulo', 'Item', 'Assunto', 'Descrição', 'Classificação', 'Tipo', 'Prazo de Atendimento VALE', 'Último Prazo'];
+            const wsAnexoI = XLSX.utils.aoa_to_sheet([anexoIHeaders,
+                                                     ...data.anexo.map(r => anexoIHeaders.map(h => r[h] || ''))]);
+            wsAnexoI['!cols'] = [5, 15, 15, 10, 30, 60, 15, 10, 20, 20].map(w => ({wch: w}));
+            XLSX.utils.book_append_sheet(wb, wsAnexoI, 'Anexo I');
 
-            const sortedYCoords = Object.keys(lines).sort((a, b) => b - a); // Do topo para baixo
+            // Aba Novas Recomendações
+            const novasCorpoHeaders = ['Local (página/seção)', 'Texto original (trecho)', 'Texto da recomendação (normalizada)', 'ÁREA RESPONSAVEL', 'COMENTÁRIO/ENCAMINHAMENTO'];
+            const wsNovas = XLSX.utils.aoa_to_sheet([novasCorpoHeaders,
+                                                    ...data.novas.map(r => novasCorpoHeaders.map(h => r[h] || ''))]);
+            wsNovas['!cols'] = [25, 60, 60, 25, 30].map(w => ({wch: w}));
+            XLSX.utils.book_append_sheet(wb, wsNovas, 'Novas Recomendações');
 
-            for (const y of sortedYCoords) {
-                const lineItems = lines[y].sort((a, b) => a.x - b.x); // Ordenar por X
-                const lineText = lineItems.map(item => item.str).join(' ').trim();
+            // Aba Corpo do Relatório
+            const wsCorpo = XLSX.utils.aoa_to_sheet([novasCorpoHeaders, // Usa os mesmos cabeçalhos para consistência
+                                                     ...data.corpo.map(r => novasCorpoHeaders.map(h => r[h] || ''))]);
+            wsCorpo['!cols'] = [25, 60, 60, 25, 30].map(w => ({wch: w}));
+            XLSX.utils.book_append_sheet(wb, wsCorpo, 'Corpo do Relatório');
 
-                // Verificar se a linha contém todos os cabeçalhos esperados (ou uma boa parte deles)
-                let matchedHeadersCount = 0;
-                let currentHeaderXs = [];
-                let currentHeaderY = parseFloat(y);
+            // Aba Sumário
+            const wsSumData = [
+                ['Métrica', 'Valor'],
+                ['Total Histórico', data.anexo.length + data.novas.length + data.corpo.length],
+                ['Em Aberto', '-'],
+                ['Concluídas', '-'],
+                ['Canceladas', '-'],
+                ['', ''],
+                ['Situação - Em Aberto', ''],
+                ['Atrasadas', '-'],
+                ['Vence este mês', '-'],
+                ['Em andamento', '-'],
+                ['Programadas', '-'],
+                ['Novas', data.novas.length],
+                ['', ''],
+                ['Novas recomendações extraídas', data.novas.length],
+                ['Recomendações no corpo', data.corpo.length],
+                ['Recomendações Anexo I', data.anexo.length],
+            ];
+            const wsSum = XLSX.utils.aoa_to_sheet(wsSumData);
+            wsSum['!cols'] = [30, 10].map(w => ({wch: w}));
+            XLSX.utils.book_append_sheet(wb, wsSum, 'Sumário');
 
-                for (const expectedHeader of expectedHeaders) {
-                    // Usar regex para encontrar o cabeçalho, ignorando espaços extras e case-insensitive
-                    const headerRegex = new RegExp(expectedHeader.replace(/[.*+?^${}()|[$|\$|/g, '\\$&'), 'i');
-                    const foundItem = lineItems.find(item => headerRegex.test(item.str));
-
-                    if (foundItem) {
-                        matchedHeadersCount++;
-                        currentHeaderXs.push(foundItem.x);
-                    }
-                }
-
-                // Se encontrarmos a maioria dos cabeçalhos na mesma linha, consideramos como cabeçalho da tabela
-                // Ajuste o threshold conforme a robustez necessária
-                if (matchedHeadersCount >= expectedHeaders.length * 0.7) { // Ex: 70% dos cabeçalhos
-                    headerFound = true;
-                    headerY = currentHeaderY;
-                    headerXs = currentHeaderXs.sort((a, b) => a - b); // Ordenar X das colunas
-                    break; // Cabeçalho encontrado, parar de procurar
-                }
-            }
-
-            if (!headerFound) {
-                return []; // Não encontrou o cabeçalho da tabela
-            }
-
-            // 2. Definir as faixas X para cada coluna
-            const columnXRanges = [];
-            for (let i = 0; i < headerXs.length; i++) {
-                const startX = headerXs[i];
-                const endX = (i + 1 < headerXs.length) ? headerXs[i + 1] : Infinity; // Última coluna vai até o fim da página
-                columnXRanges.push({ start: startX, end: endX });
-            }
-
-            // 3. Extrair as linhas de dados abaixo do cabeçalho
-            // Filtrar itens de texto que estão abaixo do cabeçalho
-            const dataItems = pageTextItems.filter(item => item.y < headerY - 5); // 5 é uma margem para garantir que não pegue o cabeçalho
-
-            // Agrupar itens de dados por linha (y-coordenada)
-            const dataLines = {};
-            dataItems.forEach(item => {
-                const y = Math.round(item.y);
-                if (!dataLines[y]) dataLines[y] = [];
-                dataLines[y].push(item);
-            });
-
-            const sortedDataYCoords = Object.keys(dataLines).sort((a, b) => b - a); // Do topo para baixo
-
-            let currentRow = {};
-            let lastY = -1;
-
-            for (const y of sortedDataYCoords) {
-                const lineItems = dataLines[y].sort((a, b) => a.x - b.x);
-
-                // Se a linha atual está muito distante da anterior, pode ser o início de uma nova linha de dados
-                // Ou se é a primeira linha de dados
-                if (lastY === -1 || (lastY - parseFloat(y)) > 15) { // 15 é uma heurística para espaçamento entre linhas
-                    if (Object.keys(currentRow).length > 0) {
-                        extractedRows.push(currentRow);
-                    }
-                    currentRow = {};
-                }
-
-                // Preencher as células da linha atual
-                for (let i = 0; i < expectedHeaders.length; i++) {
-                    const header = expectedHeaders[i];
-                    const range = columnXRanges[i];
-
-                    const cellTextItems = lineItems.filter(item => item.x >= range.start && item.x < range.end);
-                    const cellText = cellTextItems.map(item => item.str).join(' ').trim();
-
-                    if (cellText) {
-                        currentRow[header] = (currentRow[header] ? currentRow[header] + ' ' : '') + cellText;
-                    }
-                }
-                lastY = parseFloat(y);
-            }
-            if (Object.keys(currentRow).length > 0) {
-                extractedRows.push(currentRow);
-            }
-
-            // Filtrar linhas vazias ou incompletas
-            return extractedRows.filter(row => Object.keys(row).length > 0 && expectedHeaders.some(h => row[h]));
+            const now = new Date();
+            const stamp = now.toISOString().slice(0, 10);
+            XLSX.writeFile(wb, `recomendacoes_aecom_${stamp}.xlsx`);
         }
-
 
         // --- Configurar abas ---
         document.querySelectorAll('.tab-btn').forEach(btn => {
