@@ -3,15 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Extrator de Recomendações AECOM v18.0</title>
-    <!-- Favicon para evitar erro 404 -->
+    <title>Extrator de Recomendações AECOM v17.0</title>
+    <!-- Favicon simples para evitar erro 404 -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>">
 
-    <!-- CDNs para pdf.js e xlsx -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js"></script>
+    <!-- O worker.min.js será carregado via GlobalWorkerOptions.workerSrc -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #222; }
@@ -42,58 +40,64 @@
         .btn-export:hover { background: #1b5e20; }
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 16px 0; }
         .box { background: #f5f7fa; border-radius: 8px; padding: 16px; text-align: center; }
-        .box p { font-size: 24px; font-weight: bold; color: #1a3a5c; margin-bottom: 8px; }
-        .box span { font-size: 14px; color: #666; }
-        .file-list { list-style: none; padding: 0; margin-top: 16px; max-height: 200px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px; }
+        .box p { font-size: 14px; color: #666; margin-bottom: 4px; }
+        .box strong { font-size: 24px; color: #2d6a9f; }
+        .file-list ul { list-style: none; padding: 0; }
         .file-list li {
+            background: #f9f9f9; border: 1px solid #eee; border-radius: 4px;
+            padding: 10px 15px; margin-bottom: 8px;
             display: flex; justify-content: space-between; align-items: center;
-            padding: 10px 16px; border-bottom: 1px solid #eee;
-            background: #fff;
         }
-        .file-list li:last-child { border-bottom: none; }
-        .file-list li span { flex-grow: 1; text-align: left; }
         .file-list li button {
-            background: #dc3545; color: white; border: none; padding: 4px 8px;
+            background: #dc3545; color: white; border: none; padding: 5px 10px;
             border-radius: 4px; cursor: pointer; font-size: 12px;
         }
         .file-list li button:hover { background: #c82333; }
-        .tab-nav { display: flex; border-bottom: 1px solid #ddd; margin-bottom: 20px; }
+        .status-message {
+            padding: 10px 15px; border-radius: 6px; margin-top: 16px;
+            font-size: 14px; display: none;
+        }
+        .status-message.info { background: #e0f7fa; color: #00796b; border: 1px solid #00796b; }
+        .status-message.success { background: #e8f5e9; color: #2e7d32; border: 1px solid #2e7d32; }
+        .status-message.error { background: #ffebee; color: #d32f2f; border: 1px solid #d32f2f; }
+        .status-message.warning { background: #fffde7; color: #fbc02d; border: 1px solid #fbc02d; }
+
+        .progress-bar-container {
+            width: 100%; background-color: #e0e0e0; border-radius: 5px;
+            margin-top: 16px; overflow: hidden; display: none;
+        }
+        .progress-bar {
+            width: 0%; height: 25px; background-color: #4CAF50;
+            text-align: center; line-height: 25px; color: white;
+            border-radius: 5px; transition: width 0.3s ease-in-out;
+        }
+
+        .tab-nav {
+            display: flex; justify-content: center; margin-top: 24px; border-bottom: 1px solid #eee;
+        }
         .tab-btn {
-            padding: 10px 20px; cursor: pointer; border: none; background: none;
+            background: none; border: none; padding: 10px 20px; cursor: pointer;
             font-size: 16px; color: #555; border-bottom: 2px solid transparent;
             transition: all 0.3s ease;
         }
         .tab-btn:hover { color: #2d6a9f; }
         .tab-btn.active {
-            color: #2d6a9f; border-bottom-color: #2d6a9f; font-weight: bold;
+            color: #2d6a9f; border-bottom: 2px solid #2d6a9f; font-weight: bold;
         }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .results-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .tab-content {
+            display: none; padding: 20px 0;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .results-table {
+            width: 100%; border-collapse: collapse; margin-top: 15px;
+        }
         .results-table th, .results-table td {
-            border: 1px solid #ddd; padding: 8px; text-align: left;
-            font-size: 14px;
+            border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 14px;
         }
-        .results-table th { background-color: #f2f2f2; font-weight: bold; }
-        .status-message { margin-top: 15px; padding: 10px; border-radius: 5px; }
-        .status-message.success { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
-        .status-message.error { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
-        .progress-bar-container {
-            width: 100%;
-            background-color: #e0e0e0;
-            border-radius: 5px;
-            margin-top: 10px;
-            height: 20px;
-            overflow: hidden;
-        }
-        .progress-bar {
-            height: 100%;
-            width: 0%;
-            background-color: #2d6a9f;
-            text-align: center;
-            color: white;
-            line-height: 20px;
-            transition: width 0.3s ease-in-out;
+        .results-table th {
+            background-color: #f2f2f2; font-weight: bold;
         }
     </style>
 </head>
@@ -101,40 +105,44 @@
     <header>
         <h1>Extrator de Recomendações AECOM</h1>
     </header>
-
     <div class="container">
         <div class="section">
-            <h2>1. Carregar PDFs</h2>
+            <h2>1. Selecione os PDFs</h2>
             <div id="dropZone" class="drop-zone">
-                Arraste e solte PDFs aqui ou clique para selecionar
+                Arraste e solte seus arquivos PDF aqui, ou clique para selecionar.
                 <input type="file" id="pdfInput" accept=".pdf" multiple hidden>
             </div>
-            <ul id="fileList" class="file-list"></ul>
+            <div class="file-list">
+                <h3>Arquivos Selecionados:</h3>
+                <ul id="fileList">
+                    <!-- Lista de arquivos será populada aqui -->
+                </ul>
+            </div>
             <button id="processPdfsBtn" class="btn" disabled>Processar PDFs</button>
-            <div id="progressBarContainer" class="progress-bar-container" style="display: none;">
+            <div id="statusMessage" class="status-message"></div>
+            <div id="progressBarContainer" class="progress-bar-container">
                 <div id="progressBar" class="progress-bar">0%</div>
             </div>
-            <div id="statusMessage" class="status-message" style="display: none;"></div>
         </div>
 
         <div class="section">
             <h2>2. Resultados da Extração</h2>
             <div class="grid">
                 <div class="box">
-                    <p id="totalAnexoI">0</p>
-                    <span>Recomendações Anexo I</span>
+                    <p>Recomendações Anexo I</p>
+                    <strong id="totalAnexoI">0</strong>
                 </div>
                 <div class="box">
-                    <p id="totalCorpo">0</p>
-                    <span>Recomendações Corpo do Relatório</span>
+                    <p>Recomendações Corpo</p>
+                    <strong id="totalCorpo">0</strong>
                 </div>
                 <div class="box">
-                    <p id="totalNovas">0</p>
-                    <span>Novas Recomendações</span>
+                    <p>Novas Recomendações</p>
+                    <strong id="totalNovas">0</strong>
                 </div>
                 <div class="box">
-                    <p id="totalGeral">0</p>
-                    <span>Total Geral</span>
+                    <p>Total Geral</p>
+                    <strong id="totalGeral">0</strong>
                 </div>
             </div>
             <button id="exportExcelBtn" class="btn btn-export" disabled>Exportar para Excel</button>
@@ -377,6 +385,184 @@
             updateFileList();
         }
 
+        // --- Funções de Extração de Tabela (DEFINIDAS GLOBALMENTE) ---
+
+        /**
+         * Extrai dados de uma tabela de uma página PDF.
+         * @param {object} page - Objeto da página PDF.
+         * @param {string[]} headerKeywords - Palavras-chave para identificar o cabeçalho da tabela.
+         * @param {string[]} columnHeaders - Nomes das colunas esperadas para o resultado.
+         * @param {number} pageNum - Número da página atual.
+         * @param {string} tableType - Tipo da tabela (para mensagens de log).
+         * @returns {Promise<object[]>} - Array de objetos representando as linhas da tabela.
+         */
+        async function extractTableFromPage(page, headerKeywords, columnHeaders, pageNum, tableType) {
+            const textContent = await page.getTextContent();
+            const textItems = textContent.items.map(item => ({
+                str: item.str.trim(),
+                x: item.transform[4],
+                y: item.transform[5],
+                width: item.width,
+                height: item.height,
+                fontName: item.fontName,
+                dir: item.dir
+            })).filter(item => item.str.length > 0); // Filtrar itens vazios
+
+            // 1. Encontrar o cabeçalho da tabela
+            let headerY = -1;
+            let headerItemsOnLine = [];
+            const headerDetectionThreshold = 5; // Margem de erro para considerar itens na mesma linha
+
+            // Tenta encontrar todos os itens que correspondem a qualquer palavra-chave do cabeçalho
+            const potentialHeaderItems = textItems.filter(item =>
+                headerKeywords.some(keyword => item.str.toLowerCase().includes(keyword.toLowerCase()))
+            );
+
+            // Agrupa itens por linha para encontrar a linha do cabeçalho
+            const lines = {};
+            potentialHeaderItems.forEach(item => {
+                const y = Math.round(item.y / headerDetectionThreshold) * headerDetectionThreshold; // Normaliza Y
+                if (!lines[y]) lines[y] = [];
+                lines[y].push(item);
+            });
+
+            // Tenta encontrar a linha que contém a maioria das palavras-chave do cabeçalho
+            let bestLineY = -1;
+            let maxMatches = 0;
+            for (const y in lines) {
+                let currentMatches = 0;
+                for (const keyword of headerKeywords) {
+                    if (lines[y].some(item => item.str.toLowerCase().includes(keyword.toLowerCase()))) {
+                        currentMatches++;
+                    }
+                }
+                if (currentMatches > maxMatches) {
+                    maxMatches = currentMatches;
+                    bestLineY = parseFloat(y);
+                }
+            }
+
+            if (bestLineY !== -1) {
+                headerY = bestLineY;
+                headerItemsOnLine = lines[bestLineY].sort((a, b) => a.x - b.x);
+            }
+
+            if (headerY === -1 || headerItemsOnLine.length === 0) {
+                console.log(`Página ${pageNum}: Cabeçalho da tabela "${tableType}" não encontrado.`);
+                return [];
+            }
+
+            // 2. Determinar as faixas X das colunas com base nos itens do cabeçalho
+            const columnXRanges = [];
+            const pageViewport = page.getViewport({ scale: 1 });
+            const pageWidth = pageViewport.width;
+
+            // Para cada cabeçalho esperado, tenta encontrar sua posição X
+            const headerXPositions = {};
+            for (const expectedHeader of columnHeaders) {
+                const foundItem = headerItemsOnLine.find(item => item.str.toLowerCase().includes(expectedHeader.toLowerCase()));
+                if (foundItem) {
+                    headerXPositions[expectedHeader] = foundItem.x;
+                }
+            }
+
+            // Ordena os cabeçalhos encontrados por posição X
+            const sortedHeaders = columnHeaders.filter(h => headerXPositions[h] !== undefined)
+                                               .sort((a, b) => headerXPositions[a] - headerXPositions[b]);
+
+            if (sortedHeaders.length === 0) {
+                console.warn(`Página ${pageNum}: Não foi possível determinar faixas X para "${tableType}" com base nos cabeçalhos encontrados. Tentando heurística.`);
+                // Fallback: dividir a página em colunas de largura igual
+                const colWidth = pageWidth / columnHeaders.length;
+                for (let i = 0; i < columnHeaders.length; i++) {
+                    columnXRanges.push({ start: i * colWidth, end: (i + 1) * colWidth });
+                }
+            } else {
+                for (let i = 0; i < sortedHeaders.length; i++) {
+                    const currentHeader = sortedHeaders[i];
+                    const startX = headerXPositions[currentHeader];
+                    let endX;
+
+                    if (i + 1 < sortedHeaders.length) {
+                        // O fim da coluna atual é o início da próxima coluna
+                        endX = headerXPositions[sortedHeaders[i + 1]];
+                    } else {
+                        // Para a última coluna, vai até o final da página ou uma margem razoável
+                        endX = pageWidth; // Ajuste conforme a necessidade
+                    }
+                    columnXRanges.push({ header: currentHeader, start: startX, end: endX });
+                }
+            }
+
+            const extractedRows = [];
+            // 3. Extrair as linhas de dados abaixo do cabeçalho
+            // Filtrar itens de texto que estão abaixo do cabeçalho e não são parte de outro cabeçalho
+            const dataItems = textItems.filter(item => item.y < headerY - headerDetectionThreshold); // Abaixo da linha do cabeçalho
+
+            // Agrupar itens de dados por linha (y-coordenada)
+            const dataLines = {};
+            const lineGroupingThreshold = 5; // Tolerância para agrupar itens na mesma "linha"
+            dataItems.forEach(item => {
+                const y = Math.round(item.y / lineGroupingThreshold) * lineGroupingThreshold;
+                if (!dataLines[y]) dataLines[y] = [];
+                dataLines[y].push(item);
+            });
+
+            const sortedDataYCoords = Object.keys(dataLines).sort((a, b) => b - a); // Do topo para baixo
+
+            let currentRow = {};
+            let lastY = -1; // Y da linha anterior processada
+
+            for (const y of sortedDataYCoords) {
+                const lineItems = dataLines[y].sort((a, b) => a.x - b.x);
+
+                // Se a linha atual está muito distante da anterior, pode ser o início de uma nova linha de dados
+                // Ou se é a primeira linha de dados
+                const currentY = parseFloat(y);
+                if (lastY === -1 || (lastY - currentY) > (lineGroupingThreshold * 3)) { // Heurística para nova linha
+                    if (Object.keys(currentRow).length > 0) {
+                        extractedRows.push(currentRow);
+                    }
+                    currentRow = {};
+                }
+
+                // Preencher as células da linha atual
+                for (let i = 0; i < columnXRanges.length; i++) {
+                    const colRange = columnXRanges[i];
+                    const header = colRange.header || columnHeaders[i]; // Usa o cabeçalho original se não foi mapeado
+
+                    const cellTextItems = lineItems.filter(item => item.x >= colRange.start && item.x < colRange.end);
+                    const cellText = cellTextItems.map(item => item.str).join(' ').trim();
+
+                    if (cellText) {
+                        // Concatena o texto, adicionando espaço se já houver conteúdo
+                        currentRow[header] = (currentRow[header] ? currentRow[header] + ' ' : '') + cellText;
+                    }
+                }
+                lastY = currentY;
+            }
+            if (Object.keys(currentRow).length > 0) {
+                extractedRows.push(currentRow);
+            }
+
+            // Filtrar linhas vazias ou incompletas
+            return extractedRows.filter(row => Object.keys(row).length > 0 && columnHeaders.some(h => row[h]));
+        }
+
+        async function extractAnexoITables(page, pageNum) {
+            const anexoIHeaders = ['ID', 'Origem', 'Capítulo', 'Item', 'Assunto', 'Descrição', 'Classificação', 'Tipo', 'Prazo de Atendimento VALE', 'Último Prazo'];
+            // Palavras-chave para detecção do cabeçalho. Mais flexível.
+            const headerKeywords = ['ID', 'Origem', 'Capítulo', 'Item', 'Assunto', 'Descrição', 'Classificação', 'Tipo', 'Prazo', 'Último']; 
+            return await extractTableFromPage(page, headerKeywords, anexoIHeaders, pageNum, 'Anexo I');
+        }
+
+        async function extractCorpoRelatorioTables(page, pageNum) {
+            const corpoHeaders = ['Local (página/seção)', 'Texto original (trecho)', 'Texto da recomendação (normalizada)', 'ÁREA RESPONSAVEL', 'COMENTÁRIO/ENCAMINHAMENTO'];
+            // Palavras-chave para detecção do cabeçalho. Mais flexível.
+            const headerKeywords = ['Local', 'Texto original', 'Texto da recomendação', 'ÁREA RESPONSAVEL', 'COMENTÁRIO/ENCAMINHAMENTO']; 
+            return await extractTableFromPage(page, headerKeywords, corpoHeaders, pageNum, 'Corpo do Relatório');
+        }
+
         // --- Lógica de Processamento de PDF ---
         async function processPDF(file) {
             const reader = new FileReader();
@@ -386,156 +572,6 @@
                         const pdfData = new Uint8Array(reader.result);
                         const pdfDoc = await pdfjsLib.getDocument({ data: pdfData }).promise;
                         const extracted = { anexo: [], corpo: [], novas: [] };
-
-                        // --- Funções de extração de tabela (agora aninhadas em processPDF) ---
-                        async function extractTableFromPage(page, headerKeywords, columnHeaders, pageNum, tableType) {
-                            const textContent = await page.getTextContent();
-                            const textItems = textContent.items;
-
-                            // 1. Encontrar o cabeçalho da tabela
-                            let headerY = -1;
-                            let headerTextFound = false;
-                            let headerTextItems = [];
-
-                            // Tenta encontrar o cabeçalho completo ou partes dele
-                            const pageText = textItems.map(item => item.str).join(' ');
-                            const headerRegex = new RegExp(headerKeywords.join('.*?'), 'i'); // Regex flexível
-                            if (headerRegex.test(pageText)) {
-                                headerTextFound = true;
-                                // Tenta encontrar a linha do cabeçalho
-                                for (const item of textItems) {
-                                    if (headerKeywords.some(keyword => item.str.toLowerCase().includes(keyword.toLowerCase()))) {
-                                        headerTextItems.push(item);
-                                        if (headerY === -1) headerY = item.y;
-                                    }
-                                }
-                                // Se encontrou itens, refine o Y do cabeçalho para a linha mais alta
-                                if (headerTextItems.length > 0) {
-                                    headerY = Math.max(...headerTextItems.map(item => item.y));
-                                }
-                            }
-
-                            if (!headerTextFound || headerY === -1) {
-                                console.log(`Página ${pageNum}: Cabeçalho da tabela "${tableType}" não encontrado.`);
-                                return [];
-                            }
-
-                            // 2. Determinar as faixas X das colunas com base nos itens do cabeçalho
-                            // Agrupar itens do cabeçalho por Y para pegar a linha mais alta
-                            const headerLineItems = headerTextItems.filter(item => Math.abs(item.y - headerY) < 5) // Dentro de uma pequena margem Y
-                                                                   .sort((a, b) => a.x - b.x);
-
-                            const columnXRanges = [];
-                            if (headerLineItems.length > 0) {
-                                for (let i = 0; i < columnHeaders.length; i++) {
-                                    const headerKeyword = columnHeaders[i];
-                                    const matchingItems = headerLineItems.filter(item => item.str.toLowerCase().includes(headerKeyword.toLowerCase()));
-
-                                    if (matchingItems.length > 0) {
-                                        const firstItemX = Math.min(...matchingItems.map(item => item.x));
-                                        const lastItemX = Math.max(...matchingItems.map(item => item.x + item.width));
-
-                                        // Estender a faixa X para a próxima coluna ou final da página
-                                        let endX;
-                                        if (i + 1 < columnHeaders.length) {
-                                            const nextHeaderKeyword = columnHeaders[i + 1];
-                                            const nextMatchingItems = headerLineItems.filter(item => item.str.toLowerCase().includes(nextHeaderKeyword.toLowerCase()));
-                                            if (nextMatchingItems.length > 0) {
-                                                endX = Math.min(...nextMatchingItems.map(item => item.x));
-                                            } else {
-                                                endX = page.getViewport({ scale: 1 }).width; // Fim da página se não encontrar o próximo cabeçalho
-                                            }
-                                        } else {
-                                            endX = page.getViewport({ scale: 1 }).width; // Fim da página para a última coluna
-                                        }
-                                        columnXRanges.push({ start: firstItemX, end: endX });
-                                    } else {
-                                        // Se um cabeçalho não for encontrado, tente estimar a faixa X
-                                        // Isso é um fallback e pode não ser preciso
-                                        if (columnXRanges.length > 0) {
-                                            const lastRange = columnXRanges[columnXRanges.length - 1];
-                                            columnXRanges.push({ start: lastRange.end, end: lastRange.end + 100 }); // Heurística
-                                        } else {
-                                            columnXRanges.push({ start: 0, end: 100 }); // Heurística para a primeira coluna
-                                        }
-                                    }
-                                }
-                            } else {
-                                console.warn(`Página ${pageNum}: Não foi possível determinar faixas X para "${tableType}" com base nos itens do cabeçalho. Tentando heurística.`);
-                                // Fallback: dividir a página em colunas de largura igual
-                                const pageWidth = page.getViewport({ scale: 1 }).width;
-                                const colWidth = pageWidth / columnHeaders.length;
-                                for (let i = 0; i < columnHeaders.length; i++) {
-                                    columnXRanges.push({ start: i * colWidth, end: (i + 1) * colWidth });
-                                }
-                            }
-
-
-                            const extractedRows = [];
-                            // 3. Extrair as linhas de dados abaixo do cabeçalho
-                            // Filtrar itens de texto que estão abaixo do cabeçalho
-                            const dataItems = textItems.filter(item => item.y < headerY - 5); // 5 é uma margem para garantir que não pegue o cabeçalho
-
-                            // Agrupar itens de dados por linha (y-coordenada)
-                            const dataLines = {};
-                            dataItems.forEach(item => {
-                                const y = Math.round(item.y);
-                                if (!dataLines[y]) dataLines[y] = [];
-                                dataLines[y].push(item);
-                            });
-
-                            const sortedDataYCoords = Object.keys(dataLines).sort((a, b) => b - a); // Do topo para baixo
-
-                            let currentRow = {};
-                            let lastY = -1;
-
-                            for (const y of sortedDataYCoords) {
-                                const lineItems = dataLines[y].sort((a, b) => a.x - b.x);
-
-                                // Se a linha atual está muito distante da anterior, pode ser o início de uma nova linha de dados
-                                // Ou se é a primeira linha de dados
-                                if (lastY === -1 || (lastY - parseFloat(y)) > 15) { // 15 é uma heurística para espaçamento entre linhas
-                                    if (Object.keys(currentRow).length > 0) {
-                                        extractedRows.push(currentRow);
-                                    }
-                                    currentRow = {};
-                                }
-
-                                // Preencher as células da linha atual
-                                for (let i = 0; i < columnHeaders.length; i++) {
-                                    const header = columnHeaders[i];
-                                    const range = columnXRanges[i];
-
-                                    const cellTextItems = lineItems.filter(item => item.x >= range.start && item.x < range.end);
-                                    const cellText = cellTextItems.map(item => item.str).join(' ').trim();
-
-                                    if (cellText) {
-                                        currentRow[header] = (currentRow[header] ? currentRow[header] + ' ' : '') + cellText;
-                                    }
-                                }
-                                lastY = parseFloat(y);
-                            }
-                            if (Object.keys(currentRow).length > 0) {
-                                extractedRows.push(currentRow);
-                            }
-
-                            // Filtrar linhas vazias ou incompletas
-                            return extractedRows.filter(row => Object.keys(row).length > 0 && columnHeaders.some(h => row[h]));
-                        }
-
-                        async function extractAnexoITables(page, pageNum) {
-                            const anexoIHeaders = ['ID', 'Origem', 'Capítulo', 'Item', 'Assunto', 'Descrição', 'Classificação', 'Tipo', 'Prazo de Atendimento VALE', 'Último Prazo'];
-                            const headerKeywords = ['ID', 'Origem', 'Capítulo', 'Item', 'Assunto', 'Descrição', 'Classificação', 'Tipo', 'Prazo', 'Último Prazo']; // Palavras-chave para detecção
-                            return await extractTableFromPage(page, headerKeywords, anexoIHeaders, pageNum, 'Anexo I');
-                        }
-
-                        async function extractCorpoRelatorioTables(page, pageNum) {
-                            const corpoHeaders = ['Local (página/seção)', 'Texto original (trecho)', 'Texto da recomendação (normalizada)', 'ÁREA RESPONSAVEL', 'COMENTÁRIO/ENCAMINHAMENTO'];
-                            const headerKeywords = ['Local', 'Texto original', 'Texto da recomendação', 'ÁREA RESPONSAVEL', 'COMENTÁRIO/ENCAMINHAMENTO']; // Palavras-chave para detecção
-                            return await extractTableFromPage(page, headerKeywords, corpoHeaders, pageNum, 'Corpo do Relatório');
-                        }
-                        // --- Fim das funções de extração de tabela ---
-
 
                         for (let i = 1; i <= pdfDoc.numPages; i++) {
                             const page = await pdfDoc.getPage(i);
@@ -550,15 +586,17 @@
                             extracted.corpo.push(...corpoRelatorioTableData);
 
                             // Extração de "Novas Recomendações" (fora das tabelas, se houver)
-                            // Esta regex é um exemplo e pode precisar de ajuste fino
-                            const novasRecomendacoesRegex = /(?:Nova Recomendação|Recomendação Nova):\s*(.*?)(?=\n|
+                            // Regex mais genérica para capturar frases que pareçam recomendações
+                            // Procura por frases que começam com "A AECOM recomenda", "A auditoria recomenda", "Recomenda-se", etc.
+                            // e tenta capturar até o final da linha ou antes de outra recomendação/cabeçalho
+                            const novasRecomendacoesRegex = /(?:A AECOM recomenda|A auditoria recomenda|Recomenda-se|Recomendação):\s*([^.\n]+(?:[.][^.\n]+)*?)(?=\n(?:A AECOM recomenda|A auditoria recomenda|Recomenda-se|Recomendação|RELATORIO|\d+\.\d+\.\d+|
 $
-)/gi;
+))/gi;
                             let match;
                             while ((match = novasRecomendacoesRegex.exec(pageText)) !== null) {
                                 extracted.novas.push({
                                     'Local (página/seção)': `Página ${i}`,
-                                    'Texto original (trecho)': match[0],
+                                    'Texto original (trecho)': match[0].trim(),
                                     'Texto da recomendação (normalizada)': match[1].trim(),
                                     'ÁREA RESPONSAVEL': '', // Preencher se puder ser extraído
                                     'COMENTÁRIO/ENCAMINHAMENTO': '' // Preencher se puder ser extraído
