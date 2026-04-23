@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Extrator de Recomendações AECOM v19.0</title>
+    <title>Extrator de Recomendações AECOM v18.0</title>
     <!-- Favicon simples para evitar erro 404 -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>">
 
@@ -35,72 +35,33 @@
         .btn:hover { background: #1a3a5c; }
         .btn:disabled { background: #aaa; cursor: not-allowed; }
         .btn-export {
-            background: #28a745; /* Verde */
+            background: #2e7d32; margin-top: 24px;
         }
-        .btn-export:hover {
-            background: #218838;
-        }
-        .file-list {
-            list-style: none; padding: 0; margin-top: 16px;
-            max-height: 200px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px;
-        }
+        .btn-export:hover { background: #1b5e20; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 16px 0; }
+        .box { background: #f5f7fa; border-radius: 8px; padding: 16px; text-align: center; }
+        .box p { font-size: 14px; color: #666; }
+        .box strong { font-size: 24px; color: #2d6a9f; display: block; margin-top: 8px; }
+        .file-list { list-style: none; padding: 0; margin-top: 16px; }
         .file-list li {
+            background: #f9f9f9; border: 1px solid #eee; border-radius: 6px;
+            padding: 10px 15px; margin-bottom: 8px;
             display: flex; justify-content: space-between; align-items: center;
-            padding: 8px 12px; border-bottom: 1px solid #eee;
+            font-size: 14px; color: #333;
         }
-        .file-list li:last-child { border-bottom: none; }
         .file-list li button {
-            background: #dc3545; color: white; border: none; padding: 4px 8px;
+            background: #dc3545; color: white; border: none; padding: 5px 10px;
             border-radius: 4px; cursor: pointer; font-size: 12px;
         }
         .file-list li button:hover { background: #c82333; }
-        .results-summary {
-            display: flex; justify-content: space-around; flex-wrap: wrap; gap: 16px;
-            margin-bottom: 24px;
-        }
-        .summary-card {
-            background: #e9ecef; padding: 12px 20px; border-radius: 6px;
-            text-align: center; flex: 1; min-width: 150px;
-        }
-        .summary-card h4 { font-size: 16px; color: #333; margin-bottom: 4px; }
-        .summary-card p { font-size: 24px; font-weight: bold; color: #2d6a9f; }
-
-        .tabs {
-            display: flex; border-bottom: 1px solid #ddd; margin-bottom: 16px;
-        }
-        .tab-btn {
-            padding: 10px 15px; cursor: pointer; border: 1px solid transparent;
-            border-bottom: none; background: #f8f9fa; color: #555;
-            border-top-left-radius: 6px; border-top-right-radius: 6px;
-            margin-right: 2px; transition: all 0.2s;
-        }
-        .tab-btn:hover { background: #e9ecef; }
-        .tab-btn.active {
-            background: white; border-color: #ddd; border-bottom-color: white;
-            color: #2d6a9f; font-weight: bold;
-        }
-        .tab-content { display: none; padding-top: 10px; }
-        .tab-content.active { display: block; }
-
-        .results-table {
-            width: 100%; border-collapse: collapse; margin-top: 16px;
-        }
-        .results-table th, .results-table td {
-            border: 1px solid #ddd; padding: 8px; text-align: left;
-            vertical-align: top;
-        }
-        .results-table th {
-            background: #f2f2f2; font-weight: bold; color: #333;
-        }
         .status-message {
-            padding: 10px; margin-top: 16px; border-radius: 4px;
-            display: none; /* Escondido por padrão */
+            padding: 10px 15px; border-radius: 6px; margin-top: 16px;
+            font-size: 14px; display: none;
         }
-        .status-message.info { background-color: #e7f3fe; color: #0056b3; border: 1px solid #b8daff; }
-        .status-message.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .status-message.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .status-message.warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
-
+        .status-message.info { background: #e0f7fa; color: #00796b; border: 1px solid #00bcd4; }
+        .status-message.success { background: #e8f5e9; color: #2e7d32; border: 1px solid #4caf50; }
+        .status-message.warning { background: #fffde7; color: #fbc02d; border: 1px solid #ffeb3b; }
+        .status-message.error { background: #ffebee; color: #d32f2f; border: 1px solid #f44336; }
         .progress-bar-container {
             width: 100%; background-color: #e0e0e0; border-radius: 5px;
             margin-top: 16px; overflow: hidden; display: none;
@@ -108,7 +69,37 @@
         .progress-bar {
             width: 0%; height: 20px; background-color: #2d6a9f;
             text-align: center; line-height: 20px; color: white;
-            border-radius: 5px; transition: width 0.3s ease-in-out;
+            font-size: 12px; transition: width 0.3s ease-in-out;
+        }
+        .tabs {
+            display: flex; border-bottom: 1px solid #ddd; margin-top: 24px;
+        }
+        .tab-btn {
+            padding: 10px 15px; cursor: pointer; border: 1px solid transparent;
+            border-bottom: none; background: #f0f2f5; color: #555;
+            border-top-left-radius: 6px; border-top-right-radius: 6px;
+            margin-right: 2px;
+        }
+        .tab-btn.active {
+            background: white; border-color: #ddd; border-bottom: 1px solid white;
+            color: #2d6a9f; font-weight: bold;
+        }
+        .tab-content {
+            display: none; padding: 20px 0; border: 1px solid #ddd;
+            border-top: none; background: white; border-bottom-left-radius: 6px;
+            border-bottom-right-radius: 6px;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .tab-content table {
+            width: 100%; border-collapse: collapse; margin-top: 10px;
+        }
+        .tab-content th, .tab-content td {
+            border: 1px solid #eee; padding: 8px; text-align: left; font-size: 13px;
+        }
+        .tab-content th {
+            background-color: #f8f8f8; font-weight: bold;
         }
     </style>
 </head>
@@ -118,53 +109,47 @@
     </header>
     <div class="container">
         <div class="section">
-            <h2>1. Selecionar PDFs</h2>
-            <div id="dropZone" class="drop-zone">
-                <p>Arraste e solte arquivos PDF aqui, ou clique para selecionar.</p>
+            <h2>1. Selecione os PDFs</h2>
+            <div class="drop-zone" id="dropZone">
+                Arraste e solte seus arquivos PDF aqui, ou clique para selecionar.
                 <input type="file" id="pdfInput" accept=".pdf" multiple hidden>
             </div>
-            <ul id="fileList" class="file-list">
-                <li>Nenhum PDF selecionado.</li>
+            <ul class="file-list" id="fileList">
+                <!-- Arquivos PDF selecionados serão listados aqui -->
             </ul>
-            <button id="processPdfsBtn" class="btn" disabled>Processar PDFs</button>
-            <div id="progressBarContainer" class="progress-bar-container">
-                <div id="progressBar" class="progress-bar">0%</div>
+            <button class="btn" id="processPdfsBtn">Processar PDFs</button>
+            <div class="status-message" id="statusMessage"></div>
+            <div class="progress-bar-container" id="progressBarContainer">
+                <div class="progress-bar" id="progressBar">0%</div>
             </div>
-            <div id="statusMessage" class="status-message"></div>
         </div>
 
         <div class="section">
             <h2>2. Resultados da Extração</h2>
-            <div class="results-summary">
-                <div class="summary-card">
-                    <h4>Total Anexo I</h4>
-                    <p id="totalAnexoI">0</p>
+            <div class="grid">
+                <div class="box">
+                    <p>Recomendações Anexo I</p>
+                    <strong id="countAnexoI">0</strong>
                 </div>
-                <div class="summary-card">
-                    <h4>Total Corpo do Relatório</h4>
-                    <p id="totalCorpo">0</p>
+                <div class="box">
+                    <p>Recomendações Corpo do Relatório</p>
+                    <strong id="countCorpo">0</strong>
                 </div>
-                <div class="summary-card">
-                    <h4>Total Novas Recomendações</h4>
-                    <p id="totalNovas">0</p>
-                </div>
-                <div class="summary-card">
-                    <h4>Total Geral</h4>
-                    <p id="totalGeral">0</p>
+                <div class="box">
+                    <p>Novas Recomendações</p>
+                    <strong id="countNovas">0</strong>
                 </div>
             </div>
-
-            <button id="exportExcelBtn" class="btn btn-export" disabled>Exportar para Excel</button>
+            <button class="btn btn-export" id="exportExcelBtn" disabled>Exportar para Excel</button>
 
             <div class="tabs">
-                <button class="tab-btn active" data-tab="anexoI">Anexo I</button>
+                <button class="tab-btn active" data-tab="anexo">Anexo I</button>
                 <button class="tab-btn" data-tab="corpo">Corpo do Relatório</button>
                 <button class="tab-btn" data-tab="novas">Novas Recomendações</button>
             </div>
 
-            <div id="tabAnexoI" class="tab-content active">
-                <h3>Recomendações do Anexo I</h3>
-                <table class="results-table">
+            <div id="tabAnexo" class="tab-content active">
+                <table>
                     <thead>
                         <tr>
                             <th>ID</th>
@@ -179,15 +164,13 @@
                             <th>Último Prazo</th>
                         </tr>
                     </thead>
-                    <tbody id="anexoITableBody">
-                        <!-- Dados serão inseridos aqui -->
+                    <tbody id="tableBodyAnexo">
+                        <tr><td colspan="10" style="text-align: center;">Nenhuma recomendação encontrada.</td></tr>
                     </tbody>
                 </table>
             </div>
-
             <div id="tabCorpo" class="tab-content">
-                <h3>Recomendações do Corpo do Relatório</h3>
-                <table class="results-table">
+                <table>
                     <thead>
                         <tr>
                             <th>Local (página/seção)</th>
@@ -197,15 +180,13 @@
                             <th>COMENTÁRIO/ENCAMINHAMENTO</th>
                         </tr>
                     </thead>
-                    <tbody id="corpoRelatorioTableBody">
-                        <!-- Dados serão inseridos aqui -->
+                    <tbody id="tableBodyCorpo">
+                        <tr><td colspan="5" style="text-align: center;">Nenhuma recomendação encontrada.</td></tr>
                     </tbody>
                 </table>
             </div>
-
             <div id="tabNovas" class="tab-content">
-                <h3>Novas Recomendações</h3>
-                <table class="results-table">
+                <table>
                     <thead>
                         <tr>
                             <th>Local (página/seção)</th>
@@ -215,8 +196,8 @@
                             <th>COMENTÁRIO/ENCAMINHAMENTO</th>
                         </tr>
                     </thead>
-                    <tbody id="novasRecomendacoesTableBody">
-                        <!-- Dados serão inseridos aqui -->
+                    <tbody id="tableBodyNovas">
+                        <tr><td colspan="5" style="text-align: center;">Nenhuma recomendação encontrada.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -224,26 +205,20 @@
     </div>
 
     <script>
-        // Configura o worker do pdf.js explicitamente
-        if (typeof pdfjsLib !== 'undefined') {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
-        }
+        // Configuração do worker para pdf.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
 
-        const pdfInput = document.getElementById('pdfInput');
         const dropZone = document.getElementById('dropZone');
+        const pdfInput = document.getElementById('pdfInput');
         const fileList = document.getElementById('fileList');
         const processPdfsBtn = document.getElementById('processPdfsBtn');
         const exportExcelBtn = document.getElementById('exportExcelBtn');
+        const statusMessage = document.getElementById('statusMessage');
         const progressBarContainer = document.getElementById('progressBarContainer');
         const progressBar = document.getElementById('progressBar');
-        const statusMessage = document.getElementById('statusMessage');
 
         let selectedFiles = [];
-        let allExtractedData = {
-            anexo: [],
-            corpo: [],
-            novas: []
-        };
+        let allExtractedData = { anexo: [], corpo: [], novas: [] };
 
         // --- Funções de UI ---
         function updateFileList() {
@@ -254,25 +229,26 @@
             } else {
                 selectedFiles.forEach((file, index) => {
                     const li = document.createElement('li');
-                    li.innerHTML = `
-                        <span>${file.name}</span>
-                        <button data-index="${index}">Remover</button>
-                    `;
+                    li.textContent = file.name;
+                    const removeBtn = document.createElement('button');
+                    removeBtn.textContent = 'Remover';
+                    removeBtn.dataset.index = index;
+                    li.appendChild(removeBtn);
                     fileList.appendChild(li);
                 });
                 processPdfsBtn.disabled = false;
             }
+            updateResultsDisplay();
         }
 
         function updateResultsDisplay() {
-            document.getElementById('totalAnexoI').textContent = allExtractedData.anexo.length;
-            document.getElementById('totalCorpo').textContent = allExtractedData.corpo.length;
-            document.getElementById('totalNovas').textContent = allExtractedData.novas.length;
-            document.getElementById('totalGeral').textContent = allExtractedData.anexo.length + allExtractedData.corpo.length + allExtractedData.novas.length;
+            document.getElementById('countAnexoI').textContent = allExtractedData.anexo.length;
+            document.getElementById('countCorpo').textContent = allExtractedData.corpo.length;
+            document.getElementById('countNovas').textContent = allExtractedData.novas.length;
 
-            renderTable('anexoITableBody', allExtractedData.anexo, ['ID', 'Origem', 'Capítulo', 'Item', 'Assunto', 'Descrição', 'Classificação', 'Tipo', 'Prazo de Atendimento VALE', 'Último Prazo']);
-            renderTable('corpoRelatorioTableBody', allExtractedData.corpo, ['Local (página/seção)', 'Texto original (trecho)', 'Texto da recomendação (normalizada)', 'ÁREA RESPONSAVEL', 'COMENTÁRIO/ENCAMINHAMENTO']);
-            renderTable('novasRecomendacoesTableBody', allExtractedData.novas, ['Local (página/seção)', 'Texto original (trecho)', 'Texto da recomendação (normalizada)', 'ÁREA RESPONSAVEL', 'COMENTÁRIO/ENCAMINHAMENTO']);
+            renderTable('tableBodyAnexo', allExtractedData.anexo, ['ID', 'Origem', 'Capítulo', 'Item', 'Assunto', 'Descrição', 'Classificação', 'Tipo', 'Prazo de Atendimento VALE', 'Último Prazo']);
+            renderTable('tableBodyCorpo', allExtractedData.corpo, ['Local (página/seção)', 'Texto original (trecho)', 'Texto da recomendação (normalizada)', 'ÁREA RESPONSAVEL', 'COMENTÁRIO/ENCAMINHAMENTO']);
+            renderTable('tableBodyNovas', allExtractedData.novas, ['Local (página/seção)', 'Texto original (trecho)', 'Texto da recomendação (normalizada)', 'ÁREA RESPONSAVEL', 'COMENTÁRIO/ENCAMINHAMENTO']);
 
             exportExcelBtn.disabled = (allExtractedData.anexo.length + allExtractedData.corpo.length + allExtractedData.novas.length) === 0;
         }
@@ -393,8 +369,6 @@
             }
             updateFileList();
         }
-
-        // --- Funções de Extração de Tabela (DEFINIDAS GLOBALMENTE) ---
 
         /**
          * Extrai dados de uma tabela de uma página PDF.
@@ -598,7 +572,7 @@
                             // Regex mais genérica para capturar frases que pareçam recomendações
                             // Procura por frases que começam com "A AECOM recomenda", "A auditoria recomenda", "Recomenda-se", etc.
                             // e tenta capturar até o final da linha ou antes de outra recomendação/cabeçalho
-                            const novasRecomendacoesRegex = /(?:A AECOM recomenda|A auditoria recomenda|Recomenda-se|Recomendação):\s*([^.\n]+(?:[.][^.\n]+)*?)(?=\n(?:A AECOM recomenda|A auditoria recomenda|Recomenda-se|Recomendação|RELATORIO|\d+\.\d+\.\d+|
+                            const novasRecomendacoesRegex = /(A AECOM recomenda|A auditoria recomenda|Recomenda-se|Recomendação):\s*(.+?)(?=\n(?:A AECOM recomenda|A auditoria recomenda|Recomenda-se|Recomendação|RELATORIO|\d+\.\d+\.\d+|
 $
 ))/gi;
                             let match;
